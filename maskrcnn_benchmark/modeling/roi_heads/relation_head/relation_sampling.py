@@ -217,8 +217,6 @@ class label_grouping(object):
                 peer_knowledge_lst.append(body_labels)
                 peer_knowledge_lst.append(tail_labels)
 
-                tail_weight = np.sum(tail_labels) / np.sum(peer_knowledge_lst)
-
             elif expert_mode == 'h_b_t':
                 print('expert_mode:', expert_mode, '[:15]-[15:30]-[30:]')
                 head_labels = sorted_class_ids[:15]
@@ -831,7 +829,6 @@ class Relation_Sampling(object):
             rel_labels_lst.append(expert_labels)
 
         return cur_chosen_matrix, rel_labels_lst, num_groups
-
 
 
 
