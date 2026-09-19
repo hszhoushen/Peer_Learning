@@ -73,6 +73,7 @@ TEST_BATCH=${TEST_BATCH:-$DEFAULT_TEST_BATCH}
 MAX_ITER=${MAX_ITER:-20000}
 VAL_PERIOD=${VAL_PERIOD:-2000}
 CHECKPOINT_PERIOD=${CHECKPOINT_PERIOD:-2000}
+SYNC_GATHER=${SYNC_GATHER:-False}
 
 export CUDA_VISIBLE_DEVICES="$GPUS"
 export OMP_NUM_THREADS=${OMP_NUM_THREADS:-1}
@@ -105,6 +106,9 @@ if [[ "$ACTION" == train ]]; then
     SOLVER.CHECKPOINT_PERIOD "$CHECKPOINT_PERIOD"
     SOLVER.PRE_VAL False
   )
+else
+  # Object-based gathering preserves dataset indices across multi-GPU evaluation.
+  COMMON_ARGS+=(TEST.RELATION.SYNC_GATHER "$SYNC_GATHER")
 fi
 
 echo "Action: $ACTION | Backbone: $BACKBONE | Task: $TASK"

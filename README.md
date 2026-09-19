@@ -90,6 +90,7 @@ The wrappers can be configured without editing source files:
 | `BASE_LR` | `0.01` (`0.001` for Transformer) | Base learning rate |
 | `TRAIN_BATCH` | `12` | Global training batch size |
 | `MAX_ITER` | `20000` | Maximum training iterations |
+| `SYNC_GATHER` | `False` | Use index-safe object gathering during distributed evaluation |
 | `DRY_RUN` | `0` | Print the resolved command without launching it |
 
 Additional configuration overrides can be appended to any wrapper command, for example:
@@ -124,11 +125,18 @@ The paper reports substantial improvements in mean Recall under the standard Vis
 | Motifs + Peer Learning | 40.9 | 20.9 | 19.2 |
 | VCTree + Peer Learning | 42.1 | 26.5 | 19.8 |
 
-Small differences can result from the CUDA/PyTorch version, distributed sampling, and random seed. For statistical studies, keep all settings fixed and change only `SEED`.
+Release validation was also performed on all 26,446 Visual Genome PredCls test images using the published `model_0020000.pth` checkpoints:
+
+| Backbone | R@20/50/100 | mR@20/50/100 |
+| --- | ---: | ---: |
+| Motifs + Peer Learning | 34.68 / 38.90 / 39.91 | 31.84 / 38.75 / 40.94 |
+| VCTree + Peer Learning | 39.25 / 44.85 / 46.42 | 32.70 / 39.35 / 41.93 |
+
+The Motifs result reproduces the original log within 0.02 percentage points. The VCTree checkpoint preserves the expected strong mean Recall, with a small shift in the mR--R trade-off under the current software environment and explicit expertise-aware voting weights. Small differences can result from the CUDA/PyTorch version, distributed evaluation, voting configuration, and random seed. For statistical studies, keep all settings fixed and change only `SEED`.
 
 ## Checkpoints
 
-Large detector and SGG checkpoints are intentionally excluded from the Git repository. Published model files can be attached to the `v1.0-tits` GitHub release without changing the source history. Each released model should include its backbone, task, seed, configuration, and reported metrics.
+Large detector and SGG checkpoints are intentionally excluded from the Git repository. Published model files can be attached to a GitHub release without changing the source history. Each released model should include its backbone, task, seed, configuration, and reported metrics. Use `v1.0.1-tits` or later for the complete dataset loaders, current NumPy compatibility fixes, and index-safe multi-GPU evaluation defaults.
 
 ## Citation
 
