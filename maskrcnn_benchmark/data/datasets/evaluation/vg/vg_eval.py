@@ -8,6 +8,10 @@ from functools import reduce
 from pycocotools.coco import COCO
 from pycocotools.cocoeval import COCOeval
 
+# pycocotools 2.0 still references this alias, which NumPy 1.24 removed.
+if "float" not in np.__dict__:
+    np.float = float
+
 from maskrcnn_benchmark.data import get_dataset_statistics
 from maskrcnn_benchmark.structures.bounding_box import BoxList
 from maskrcnn_benchmark.structures.boxlist_ops import boxlist_iou
