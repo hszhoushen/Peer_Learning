@@ -10,8 +10,8 @@ dist/
 apex/
 # cocoapi
 cocoapi/
-# datasets
-datasets/
+# downloaded datasets (keep the source package under maskrcnn_benchmark/data/datasets)
+/datasets/
 # figs
 figs/
 # visual_genome_python_driver
@@ -33,7 +33,7 @@ output
 checkpoint/
 
 # dataset
-datasets/vg/
+/datasets/vg/
 *.png
 *.jpg
 *.jpeg
@@ -57,6 +57,7 @@ datasets/vg/
 checkpoints/
 *.pth
 *.pytorch
+!maskrcnn_benchmark/data/datasets/evaluation/vg/zeroshot_triplet.pytorch
 
 # Experiment artifacts
 eval_outputs/
