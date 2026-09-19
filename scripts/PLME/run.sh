@@ -96,9 +96,10 @@ COMMON_ARGS=(
   OUTPUT_DIR "$OUTPUT_DIR"
 )
 
+ACTION_ARGS=()
 if [[ "$ACTION" == train ]]; then
+  ACTION_ARGS+=(--seed "$SEED")
   COMMON_ARGS+=(
-    --seed "$SEED"
     SOLVER.IMS_PER_BATCH "$TRAIN_BATCH"
     SOLVER.BASE_LR "$BASE_LR"
     SOLVER.MAX_ITER "$MAX_ITER"
@@ -120,6 +121,7 @@ COMMAND=(
   --master_port "$MASTER_PORT"
   --nproc_per_node "$NPROC"
   "$ENTRYPOINT"
+  "${ACTION_ARGS[@]}"
   "${COMMON_ARGS[@]}"
   "$@"
 )
