@@ -52,11 +52,13 @@ class ROIRelationHead(torch.nn.Module):
         self.use_per_class_content_aware_matrix = cfg.MODEL.ROI_RELATION_HEAD.USE_PER_CLASS_CONTEXT_AWARE
         self.use_relation_sampling = cfg.MODEL.ROI_RELATION_HEAD.RELATION_SAMPLING
         self.expert_voting_flag = cfg.MODEL.ROI_RELATION_HEAD.EXPERT_VOTING
-        self.loss_option = cfg.MODEL.ROI_RELATION_HEAD.LOSS_OPTION  
-        
+        self.loss_option = cfg.MODEL.ROI_RELATION_HEAD.LOSS_OPTION
+        self.knowledge_weights = cfg.MODEL.ROI_RELATION_HEAD.KNOWLEDGE_WEIGHTS
+
+
         self.label_grouping = label_grouping(self.cfg)
         self.peer_knowledge_lst = self.label_grouping.obtain_peer_knowledge(self.expert_mode)       # hbt_b_t, h_b_t, hbt_ht_bt
-        
+
         #self.label_group_dic = self.label_grouping.obtain_group_labels()
         #print('self.label_group_dic:', self.label_group_dic)
         #self.peer_knowledge_lst = self.obtain_peer_knowledge('hbt_b_t')       # hbt_b_t, h_b_t
@@ -125,7 +127,7 @@ class ROIRelationHead(torch.nn.Module):
                     max_label = key
 
         return max_label, max_score
-    
+
     # def obtain_peer_knowledge(self, dataset_name, expert_mode):
 
     #     if dataset_name == 'vg':
@@ -135,8 +137,8 @@ class ROIRelationHead(torch.nn.Module):
     #                             793.0, 151.0, 601.0, 429.0, 71.0, 4260.0, 44.0, 5086.0, 2273.0, 299.0, 3757.0, 551.0,
     #                             270.0, 1225.0, 352.0, 47326.0, 4810.0, 11059.0]
     #     elif dataset_name == 'oiv6':
-    #         REL_CLASS_NUM_LST = [200000.0, 115251.0, 33018.0, 102653.0, 240.0, 1332.0, 189.0, 67.0, 34684.0, 12223.0, 
-    #                              3460.0, 287.0, 96.0, 10.0, 3916.0, 82.0, 11.0, 20149.0, 87.0, 1797.0, 
+    #         REL_CLASS_NUM_LST = [200000.0, 115251.0, 33018.0, 102653.0, 240.0, 1332.0, 189.0, 67.0, 34684.0, 12223.0,
+    #                              3460.0, 287.0, 96.0, 10.0, 3916.0, 82.0, 11.0, 20149.0, 87.0, 1797.0,
     #                              11.0, 4192.0, 1988.0, 151.0, 54.0, 950.0, 22.0, 524.0, 75.0, 10881.0, 160.0]
 
 
@@ -156,7 +158,7 @@ class ROIRelationHead(torch.nn.Module):
     #         peer_knowledge_lst.append(head_labels)
     #         peer_knowledge_lst.append(body_labels)
     #         peer_knowledge_lst.append(tail_labels)
-            
+
     #     elif expert_mode == 'h_b_t':
     #         head_labels = sorted_class_ids[:16]
     #         body_labels = sorted_class_ids[16:36]
@@ -164,7 +166,7 @@ class ROIRelationHead(torch.nn.Module):
     #         peer_knowledge_lst.append(head_labels)
     #         peer_knowledge_lst.append(body_labels)
     #         peer_knowledge_lst.append(tail_labels)
-            
+
     #     elif expert_mode == 'hbt_ht_bt':
     #         head_labels = sorted_class_ids
     #         body_tail_labels = sorted_class_ids[16:]  # Body and tail together
@@ -173,26 +175,29 @@ class ROIRelationHead(torch.nn.Module):
     #         peer_knowledge_lst.append(head_labels)
     #         peer_knowledge_lst.append(head_tail_labels)
     #         peer_knowledge_lst.append(body_tail_labels)
-                
+
     #     return peer_knowledge_lst
 
     def obtain_result_lst_peer_network(self, relation_logits_lst, obj_refine_logits, rel_pair_idxs, proposals):
         result_lst = []
-        
+
         for i in range(self.num_experts):
+            # print('relation_logits_lst[i]:', relation_logits_lst[i].shape)
+            # print('relation_logits_lst[i]:', relation_logits_lst[i].shape)
+
             result = self.post_processor((relation_logits_lst[i], obj_refine_logits), rel_pair_idxs, proposals)
             # print('result:', len(result), result[0].fields())
-            
+
             result_lst.append(result)
-            
+
         return result_lst
-    
+
     def obtain_idx_pair_rel_score_lst(self, result_lst, j):
         rel_pair_idxs_lst = []
         pred_rel_labels_lst = []
         pred_rel_scores_lst = []
         pred_rel_scores_vector_lst = []
-        
+
         for i in range(self.num_experts):
             # Get relevant fields from the result
             rel_pair_idx_expert = result_lst[i][j].get_field('rel_pair_idxs')
@@ -203,7 +208,7 @@ class ROIRelationHead(torch.nn.Module):
             pred_rel_scores_vector_expert = result_lst[i][j].get_field('pred_rel_scores')
             # print('pred_rel_scores_vector_expert:', pred_rel_scores_vector_expert.shape, pred_rel_scores_vector_expert[0])
 
-            #print('pred_rel_scores_vector_expert:', np.sum(pred_rel_scores_vector_expert[0].detach().cpu().numpy()), np.argmax(pred_rel_scores_vector_expert[0].detach().cpu().numpy()), pred_rel_scores_vector_expert[0], 
+            #print('pred_rel_scores_vector_expert:', np.sum(pred_rel_scores_vector_expert[0].detach().cpu().numpy()), np.argmax(pred_rel_scores_vector_expert[0].detach().cpu().numpy()), pred_rel_scores_vector_expert[0],
             #      np.sum(pred_rel_scores_vector_expert[5].detach().cpu().numpy()), np.argmax(pred_rel_scores_vector_expert[5].detach().cpu().numpy()), pred_rel_scores_vector_expert[5])
 
             rel_pair_idxs_lst.append(rel_pair_idx_expert.detach().cpu().numpy())
@@ -212,23 +217,23 @@ class ROIRelationHead(torch.nn.Module):
             pred_rel_scores_vector_lst.append(pred_rel_scores_vector_expert.detach().cpu().numpy())
 
         return rel_pair_idxs_lst, pred_rel_labels_lst, pred_rel_scores_lst, pred_rel_scores_vector_lst
-            
-            
+
+
     # def combine_expert_scores(self, rel_pair_idxs_lst, expert_scores_lst):
     #     all_pairs = np.concatenate(rel_pair_idxs_lst)
     #     unique_pairs, unique_idx = np.unique(all_pairs, axis=0, return_inverse=True)
-        
+
     #     # print('test:', expert_scores_lst[0].shape[1])
     #     combined_scores = np.zeros((len(unique_pairs), expert_scores_lst[0].shape[1]))
     #     expert_scores = [np.zeros((len(unique_pairs), expert_scores_lst[0].shape[1])) for _ in range(len(expert_scores_lst))]
     #     # print('combined_scores.shape:', combined_scores.shape)
-        
-        
+
+
     #     for idx, rel_pair_idxs in enumerate(rel_pair_idxs_lst):
     #         # print('idx:', idx, 'rel_pair_idxs:', len(rel_pair_idxs), rel_pair_idxs[0])
     #         # print('unique_pairs:', len(unique_pairs), unique_pairs[0])
     #         # print('unique_pairs == rel_pair_idx:', unique_pairs == rel_pair_idx)
-                  
+
     #         for rel_pair_idx, rel_score in zip(rel_pair_idxs, expert_scores_lst[idx]):
     #             # print('unique_pairs == rel_pair_idx:', unique_pairs == rel_pair_idx)
     #             # print('np.where unique_pairs == rel_pair_idx:', np.where((unique_pairs == rel_pair_idx)))
@@ -240,21 +245,21 @@ class ROIRelationHead(torch.nn.Module):
     #             # peer2 = np.argmax(expert_scores[1][unique_idx][0, 1:]) + 1
     #             # peer3 = np.argmax(expert_scores[2][unique_idx][0, 1:]) + 1
     #             # print('perrs:', peer1, peer2, peer3)
-        
+
     #     # Assign the scores according to their area of expertise
     #     for i, peer_knowledge in enumerate(self.peer_knowledge_lst):
     #         if i == 0:
-    #             combined_scores[:, peer_knowledge] = expert_scores[i][:, peer_knowledge] 
+    #             combined_scores[:, peer_knowledge] = expert_scores[i][:, peer_knowledge]
     #         else:
-    #             combined_scores[:, peer_knowledge] = expert_scores[i][:, peer_knowledge] 
-            
+    #             combined_scores[:, peer_knowledge] = expert_scores[i][:, peer_knowledge]
+
     #     return unique_pairs, combined_scores
 
     def create_pred_idx_pair_label_score_dictionary(self, rel_pair_idxs_lst, pred_rel_labels_lst, pred_rel_scores_lst, pred_rel_scores_vector_lst):
         expert_dic_lst = []
         score_matrix = np.zeros((rel_pair_idxs_lst[0].shape[0], len(pred_rel_scores_vector_lst[0][1])))
         # print("score_matrix:", score_matrix.shape)
-        
+
         # unique_pairs, combined_score_matrix = self.combine_expert_scores(rel_pair_idxs_lst, pred_rel_scores_vector_lst)
 
         for i in range(self.num_experts):
@@ -262,12 +267,12 @@ class ROIRelationHead(torch.nn.Module):
             for j in range(rel_pair_idxs_lst[i].shape[0]):
                 idx_pair = rel_pair_idxs_lst[i][j, :]
                 label = pred_rel_labels_lst[i][j]
-                score = pred_rel_scores_lst[i][j]    
-                score_vec = pred_rel_scores_vector_lst[i][j] 
+                score = pred_rel_scores_lst[i][j]
+                score_vec = pred_rel_scores_vector_lst[i][j]
                 expert_dic[str(idx_pair)] = [label, score, score_vec]
-                
+
             expert_dic_lst.append(expert_dic)
-        
+
         return expert_dic_lst #, unique_pairs, combined_score_matrix
 
     def combine_score_matrix(self, rel_pair_idxs_lst, expert_dic_lst):
@@ -275,83 +280,97 @@ class ROIRelationHead(torch.nn.Module):
         num_ones_first_expert = 0
         num_ones_second_expert = 0
         num_ones_third_expert = 0
+
         # knowledge_weights = [1.0, 6.5, 11.6]
-        knowledge_weights = [1.0, 5.0, 5.0]
+        # knowledge_weights = [1.0, 4.0, 16.0]
+        # knowledge_weights = [1.0, 5.0, 5.0]
+
+        knowledge_weights = self.knowledge_weights
+
+        # if self.num_experts == 5:
+        #     knowledge_weights = [1.0, 2.0, 4.0, 8.0, 16.0]
+        # elif self.num_experts == 4:
+        #     knowledge_weights = [1.0, 2.0, 4.0, 16.0]
+        # else:
+        #     knowledge_weights = [1.0, 4.0, 16.0]
 
         for j in range(rel_pair_idxs_lst[0].shape[0]):
             idx_pair = rel_pair_idxs_lst[0][j, :]
             vector_scores = []
-            
+
             for i in range(self.num_experts):
                 label_score_info = expert_dic_lst[i][str(idx_pair)]
                 vector_scores.append(label_score_info[2])
 
 
-            confidences = np.zeros(self.num_experts)
-            max_confidences = np.zeros(self.num_experts)
+            # confidences = np.zeros(self.num_experts)
+            # max_confidences = np.zeros(self.num_experts)
 
-            for i in range(self.num_experts):
-                if i == 0:
-                    # Adjust indices by subtracting 1
-                    adjusted_indices = np.array(self.peer_knowledge_lst[i][1:]) - 1
-                    confidences[i] = np.mean(vector_scores[i][1:][adjusted_indices])
-                    max_confidences[i] = np.max(vector_scores[i][1:][adjusted_indices])
-                else:
-                    confidences[i] = np.mean(vector_scores[i][self.peer_knowledge_lst[i]])
-                    max_confidences[i] = np.max(vector_scores[i][self.peer_knowledge_lst[i]])
+            # for i in range(self.num_experts):
+            #     if i == 0:
+            #         # Adjust indices by subtracting 1
+            #         adjusted_indices = np.array(self.peer_knowledge_lst[i][1:]) - 1
+            #         confidences[i] = np.mean(vector_scores[i][1:][adjusted_indices])
+            #         max_confidences[i] = np.max(vector_scores[i][1:][adjusted_indices])
+            #     else:
+            #         confidences[i] = np.mean(vector_scores[i][self.peer_knowledge_lst[i]])
+            #         max_confidences[i] = np.max(vector_scores[i][self.peer_knowledge_lst[i]])
 
-            normalized_confidences = confidences / np.min(confidences)
-            normalized_max_confidences = max_confidences / np.min(max_confidences)
-            # print('normalized_confidences:', normalized_confidences, confidences)
-            
-            if self.num_experts == 2:
-                num_ones_first_expert += np.count_nonzero(normalized_confidences[0] == 1.0)
-                num_ones_second_expert += np.count_nonzero(normalized_confidences[1] == 1.0)
-                
-            elif self.num_experts == 3:
-                num_ones_first_expert += np.count_nonzero(normalized_confidences[0] == 1.0)
-                num_ones_second_expert += np.count_nonzero(normalized_confidences[1] == 1.0)
-                num_ones_third_expert += np.count_nonzero(normalized_confidences[2] == 1.0)
-            
-            #print('normalized_max_confidences:', normalized_max_confidences, max_confidences)
-            
-            # Find the index of the expert with the highest confidence
-            highest_confidence_index = np.argmax(normalized_confidences)
+            # normalized_confidences = confidences / np.min(confidences)
+            # normalized_max_confidences = max_confidences / np.min(max_confidences)
+            # # print('normalized_confidences:', normalized_confidences, confidences)
 
+            # if self.num_experts == 2:
+            #     num_ones_first_expert += np.count_nonzero(normalized_confidences[0] == 1.0)
+            #     num_ones_second_expert += np.count_nonzero(normalized_confidences[1] == 1.0)
+
+            # elif self.num_experts == 3:
+            #     num_ones_first_expert += np.count_nonzero(normalized_confidences[0] == 1.0)
+            #     num_ones_second_expert += np.count_nonzero(normalized_confidences[1] == 1.0)
+            #     num_ones_third_expert += np.count_nonzero(normalized_confidences[2] == 1.0)
+
+
+            # highest_confidence_index = np.argmax(normalized_confidences)
+            # print('vector_scores[0][peer_knowledge[0]]:', len(vector_scores[0][self.peer_knowledge_lst[0]]),
+            #       vector_scores[0][self.peer_knowledge_lst[0]])
+            # print('vector_scores[0][peer_knowledge[1]]:', len(vector_scores[0][self.peer_knowledge_lst[1]]),
+            #       vector_scores[0][self.peer_knowledge_lst[1]])
+            # print('vector_scores[0][peer_knowledge[2]]:', len(vector_scores[0][self.peer_knowledge_lst[2]]),
+            #       vector_scores[0][self.peer_knowledge_lst[2]])
 
             for i, peer_knowledge in enumerate(self.peer_knowledge_lst):
                     # if i == highest_confidence_index:
-                    #     weight = knowledge_weights[i]  
-                    # else: 
+                    #     weight = knowledge_weights[i]
+                    # else:
                     #     weight = 1.0
-                    weight = 1.0
+                    # weight = 1.0
 
                     # print('i:', i, 'peer_knowledge:', peer_knowledge)
                     if (i == 0):
-                        # print('vector_scores[0][peer_knowledge]:', 
-                        #       np.max(vector_scores[i][peer_knowledge]), 
+                        # print('vector_scores[0][peer_knowledge]:',
+                        #       np.max(vector_scores[i][peer_knowledge]),
                         #       np.mean(vector_scores[i][peer_knowledge]),
                         #       vector_scores[i][peer_knowledge])
                         #[1:][1:]
-                        combined_scores[j, peer_knowledge] += vector_scores[i][peer_knowledge] * knowledge_weights[i] 
+                        combined_scores[j, peer_knowledge] += vector_scores[i][peer_knowledge] * knowledge_weights[i]
                     elif (i == 1):
-                        # print('vector_scores[1][peer_knowledge]:', 
+                        # print('vector_scores[1][peer_knowledge]:',
                         #       np.max(vector_scores[i][peer_knowledge]),
                         #       np.mean(vector_scores[i][peer_knowledge]),
                         #       vector_scores[i][peer_knowledge])
-                        combined_scores[j, peer_knowledge] += vector_scores[i][peer_knowledge] * knowledge_weights[i]  
+                        combined_scores[j, peer_knowledge] += vector_scores[i][peer_knowledge] * knowledge_weights[i]
                     else:
-                        # print('vector_scores[2][peer_knowledge]:', 
+                        # print('vector_scores[2][peer_knowledge]:',
                         #       np.max(vector_scores[i][peer_knowledge]),
                         #       np.mean(vector_scores[i][peer_knowledge]),
                         #       vector_scores[i][peer_knowledge])
-                        combined_scores[j, peer_knowledge] += vector_scores[i][peer_knowledge] * knowledge_weights[i] 
-        
+                        combined_scores[j, peer_knowledge] += vector_scores[i][peer_knowledge] * knowledge_weights[i]
+
         # print('num_ones_first_expert:', num_ones_first_expert, num_ones_second_expert, num_ones_third_expert)
-            
+
         return combined_scores
-    
-    
+
+
     def generate_predicate_labels(self, scores_matrix):
         # Find the index of maximum value in each row
         # The 'axis=1' parameter means the operation is performed across each row
@@ -368,13 +387,13 @@ class ROIRelationHead(torch.nn.Module):
             labels = []
             scores = []
             vector_scores = []
-            
+
             for i in range(self.num_experts):
                 label_score_info = expert_dic_lst[i][str(idx_pair)]
                 labels.append(label_score_info[0])
                 scores.append(label_score_info[1])
                 vector_scores.append(label_score_info[2])
-            
+
             # choose to use max or accumulate max
             # max_label, max_score = self.vote_max_score(labels, scores)
             max_label, max_score = self.vote_accumulate_max_score(labels, scores, vector_scores)
@@ -384,22 +403,22 @@ class ROIRelationHead(torch.nn.Module):
             vector_scores_lst.append(vector_scores)
 
         return max_label_lst, max_score_lst
-    
+
     def obtain_predicate_score_matrix(self, result_lst, j, predicate_label_lst, predicate_score_lst):
-        
+
         # clear score matrix of first peer
         predicate_scores_matrix = result_lst[0][j].get_field('pred_rel_scores')
         # print('predicate_scores_matrix.shape:', predicate_scores_matrix.shape)  # (#, 51)
         # print('np.arange(predicate_label_lst[0].shape):', np.arange(len(predicate_label_lst)))  # generate a list from 0 to # -1
         # print('predicate_label_lst[0]:', len(predicate_label_lst))  # the length of #
-        
+
         predicate_scores_matrix[np.arange(len(predicate_label_lst)), predicate_label_lst] = 0.0
         predicate_scores_matrix = predicate_scores_matrix.cpu().numpy()
         # print('len(predicate_label_lst):', len(predicate_label_lst), predicate_label_lst)
-        
+
         for i in range(len(predicate_label_lst)):
             predicate_scores_matrix[i, predicate_label_lst[i]] = predicate_score_lst[i]
-            
+
         return predicate_scores_matrix
 
     def expert_voting(self, relation_logits_lst, obj_refine_logits, rel_pair_idxs, proposals):
@@ -413,17 +432,17 @@ class ROIRelationHead(torch.nn.Module):
         # result_copy = result_lst[1][0].copy_with_fields(fields)
         # print('has_field pred_labels:', result_lst[1][0].has_field('pred_labels'))
         # print('has_field pred_scores:', result_lst[1][0].has_field('pred_scores'))
-  
 
-        for j in range(len(result_lst[0])): 
+
+        for j in range(len(result_lst[0])):
             # Create the pred_rel_scores and pred_rel_labels
             rel_pair_idxs_lst, pred_rel_labels_lst, pred_rel_scores_lst, pred_rel_scores_vector_lst = self.obtain_idx_pair_rel_score_lst(result_lst, j)
 
             # Create dictionary for fast search
             expert_dic_lst = self.create_pred_idx_pair_label_score_dictionary(rel_pair_idxs_lst, pred_rel_labels_lst, pred_rel_scores_lst, pred_rel_scores_vector_lst)
             # predicate_labels = self.generate_predicate_labels(scores_matrix)
-            
-            
+
+
             # One branch to post processing the relational scores
             # Obtian the labels of combined_scores
             predicate_scores = self.combine_score_matrix(rel_pair_idxs_lst, expert_dic_lst)
@@ -434,7 +453,7 @@ class ROIRelationHead(torch.nn.Module):
             # obtain predicate_label_lst and predicate_score_lst
             # predicate_label_lst, predicate_score_lst = self.obtain_max_label_score_lst(rel_pair_idxs_lst, expert_dic_lst)
             # predicate_scores_matrix = self.obtain_predicate_score_matrix(result_lst, j, predicate_label_lst, predicate_score_lst)
-            
+
             # print('combined_scores.shape:', combined_scores.shape)
             # print('predicate_labels:', predicate_labels)
 
@@ -444,22 +463,22 @@ class ROIRelationHead(torch.nn.Module):
 
             result_lst[0][j].remove_field('rel_pair_idxs')
             result_lst[0][j].remove_field('pred_rel_labels')
-            result_lst[0][j].remove_field('pred_rel_scores')                
-                
+            result_lst[0][j].remove_field('pred_rel_scores')
+
             rel_pair_tensor = torch.tensor(rel_pair_idxs_lst[0]).cuda()
             rel_label_tensor = torch.tensor(predicate_labels).cuda()
             scores_matrix_tensor = torch.tensor(predicate_scores).cuda()
-            
+
             #rel_label_tensor = torch.tensor(predicate_label_lst).cuda()
             #scores_matrix_tensor = torch.tensor(predicate_scores_matrix).cuda()
-            
+
             result_lst[0][j].add_field('rel_pair_idxs', rel_pair_tensor)  # (#rel, 2)
             result_lst[0][j].add_field('pred_rel_labels', rel_label_tensor)  # (#rel, )
             result_lst[0][j].add_field('pred_rel_scores', scores_matrix_tensor)  # (#rel, )
-    
-            
+
+
         return result_lst[0], {}
-    
+
         # Obtain the indices from highest score to lowest score
         # ind_lst = np.argsort(max_score_lst)[::-1]
         # print('ind_lst:', ind_lst)
@@ -472,7 +491,7 @@ class ROIRelationHead(torch.nn.Module):
         # for i in range(rel_pair_idxs_lst[0].shape[0]):
         #     rel_label = max_label_lst[ind_lst[i]]
         #     rel_label_lst.append(rel_label)
-            
+
         # for i in range(rel_pair_idxs_lst[0].shape[0]):
         #     rel_pair = rel_pair_idxs_lst[0][ind_lst[i]]
         #     rel_pair_lst.append(rel_pair)
@@ -487,7 +506,7 @@ class ROIRelationHead(torch.nn.Module):
         # rel_pair_tensor = torch.tensor(unique_pairs).cuda()
         # rel_label_tensor = torch.tensor(predicate_labels).cuda()
         # scores_matrix_tensor = torch.tensor(scores_matrix).cuda()
-    
+
         # print('rel_pair_tensor:', rel_pair_tensor.shape)
         # print('rel_pair_tensor:', rel_label_tensor.shape)
         # print('pred_rel_scores_matrix_tensor:', pred_rel_scores_matrix_tensor.shape)
@@ -496,13 +515,13 @@ class ROIRelationHead(torch.nn.Module):
         # rel_pair_idxs_first =  result_lst[0][0].get_field('rel_pair_idxs')  # (#rel, 2)
         # pred_rel_labels_first = result_lst[0][0].get_field('pred_rel_labels')
         # pred_rel_scores_first = result_lst[0][0].get_field('pred_rel_scores')
-        
-        #return result_lst[0], {}
-        
-        
- 
 
-   
+        #return result_lst[0], {}
+
+
+
+
+
 
     def forward(self, features, proposals, targets=None, logger=None):
         """
@@ -542,7 +561,7 @@ class ROIRelationHead(torch.nn.Module):
             union_features = self.union_feature_extractor(features, proposals, rel_pair_idxs)
         else:
             union_features = None
-        
+
         # final classifier that converts the features into predictions
         # should corresponding to all the functions and layers after the self.context class
 
@@ -554,20 +573,41 @@ class ROIRelationHead(torch.nn.Module):
             weighted_expert_relation_logits_lst = []    # list for storing the weighted expert info
             expert_relation_logits_lst = []             # merge individual experts into one list
 
+            # relation sampling
             if self.use_relation_sampling:
-                refine_logits, relation_logits, add_losses, rel_labels_lst, relation_logits_lst, beta_relation_aware_gating = self.predictor(
-                    proposals, rel_pair_idxs, rel_labels, rel_binarys, roi_features, union_features, logger)
-
+                # print('self.use_relation_sampling')
+                refine_logits, relation_logits, add_losses, rel_labels_lst, relation_logits_lst, beta_relation_aware_gating = self.predictor(proposals,
+                                                                                                                                             rel_pair_idxs,
+                                                                                                                                             rel_labels,
+                                                                                                                                             rel_binarys,
+                                                                                                                                             roi_features,
+                                                                                                                                             union_features,
+                                                                                                                                             logger)
 
             # if using the context-aware mixture-of-experts
             elif self.use_relation_aware_gating:
-                refine_logits, relation_logits, add_losses, relation_logits_lst, beta_relation_aware_gating, weighted_rel_dists_full_sum = self.predictor(proposals, rel_pair_idxs, rel_labels, rel_binarys, roi_features, union_features, logger)
+                # print('self.use_relation_aware_gating')
+                refine_logits, relation_logits, add_losses, relation_logits_lst, beta_relation_aware_gating, weighted_rel_dists_full_sum = self.predictor(proposals,
+                                                                                                                                                          rel_pair_idxs,
+                                                                                                                                                          rel_labels,
+                                                                                                                                                          rel_binarys,
+                                                                                                                                                          roi_features,
+                                                                                                                                                          union_features,
+                                                                                                                                                          logger)
             elif self.use_per_class_content_aware_matrix:
-                refine_logits, relation_logits, add_losses, relation_logits_lst, weighted_rel_dists_full_sum = self.predictor(proposals, rel_pair_idxs, rel_labels, rel_binarys, roi_features, union_features, logger)
-
+                # print('self.use_per_class_content_aware_matrix')
+                refine_logits, relation_logits, add_losses, relation_logits_lst, weighted_rel_dists_full_sum = self.predictor(proposals,
+                                                                                                                              rel_pair_idxs,
+                                                                                                                              rel_labels,
+                                                                                                                              rel_binarys,
+                                                                                                                              roi_features,
+                                                                                                                              union_features,
+                                                                                                                              logger)
 
             # if using the mixture-of-experts
             else:
+                # print('self.mixture-of-experts')
+
                 # refine_logits, relation_logits, add_losses, relation_logits_lst, weighted_rel_dists_full_sum, rel_dists_full_mean = self.predictor(proposals, rel_pair_idxs, rel_labels, rel_binarys, roi_features, union_features, logger)
 
                 refine_logits, relation_logits, add_losses, relation_logits_lst = self.predictor(proposals, rel_pair_idxs, rel_labels, rel_binarys, roi_features, union_features, logger)
@@ -581,34 +621,49 @@ class ROIRelationHead(torch.nn.Module):
                 # Loop over the tensors with the same shape
                 for i in range(len(relation_logits_lst[0])):
                     # Stack the tensors with the same shape into a single tensor
-                    
+
                     relation_logits_all = torch.stack([relation_logits_lst[j][i] for j in range(len(relation_logits_lst))])
-            
+
                     # Compute the mean along the first dimension of the stacked tensor
                     relation_logits_mean.append(torch.mean(relation_logits_all, dim=0))
 
-
+                    # print('relation_logits_mean:', relation_logits_mean)
+                    # print('relation_logits_mean:', relation_logits_mean.shape)
 
         else:
             refine_logits, relation_logits, add_losses = self.predictor(proposals, rel_pair_idxs, rel_labels, rel_binarys, roi_features, union_features, logger)
-
 
         # for test
         if not self.training:
             if self.num_experts > 1:
                 # showing the performance of weighted experts
                 if self.use_relation_sampling:
+                    # print('use_relation_sampling')
                     result, _ = self.expert_voting(relation_logits_lst, refine_logits, rel_pair_idxs, proposals)
-                
+
                 elif self.loss_option == 'PLME_LOSS':
+                    # print('PLME_LOSS')
                     # result = self.post_processor((relation_logits_mean, refine_logits), rel_pair_idxs, proposals)
                     # result = self.post_processor((relation_logits, refine_logits), rel_pair_idxs, proposals)
                     # print('relation_logits_lst:', len(relation_logits_lst))
+
+                    # consensus voting
                     result, _ = self.expert_voting(relation_logits_lst, refine_logits, rel_pair_idxs, proposals)
+
+                    # average ensemble
+                    # result = self.post_processor((relation_logits_mean, refine_logits), rel_pair_idxs, proposals)
                     # result = self.post_processor((relation_logits_lst[2], refine_logits), rel_pair_idxs, proposals)
                 else:
-                    result = self.post_processor((weighted_rel_dists_full_sum, refine_logits), rel_pair_idxs, proposals)
+                    # print('using others')
+                    # result = self.post_processor((weighted_rel_dists_full_sum, refine_logits), rel_pair_idxs, proposals)
                     # result = self.post_processor((expert_relation_logits_lst, refine_logits), rel_pair_idxs, proposals)
+                    # result = self.post_processor((relation_logits_lst[2], refine_logits), rel_pair_idxs, proposals)
+
+                    # old one
+                    # result = self.post_processor((weighted_rel_dists_full_sum, refine_logits), rel_pair_idxs, proposals)
+
+                    # test ce_pn loss
+                    result = self.post_processor((weighted_rel_dists_full_sum, refine_logits), rel_pair_idxs, proposals)
 
                 # showing the performance of all experts
                 # result = self.post_processor((expert_relation_logits_lst, refine_logits), rel_pair_idxs, proposals)
@@ -622,9 +677,10 @@ class ROIRelationHead(torch.nn.Module):
 
             return roi_features, result, {}
 
-        # add multiple experts
+        # add multiple experts for loss evaluation
         if self.num_experts > 1:
             if self.use_relation_sampling:
+                # print('use_relation_sampling')
                 loss_relation, loss_refine = self.loss_evaluator(proposals, rel_labels, relation_logits, refine_logits,
                                                                  beta_relation_aware_gating=beta_relation_aware_gating,
                                                                  extra_info=relation_logits_lst,
@@ -636,11 +692,11 @@ class ROIRelationHead(torch.nn.Module):
                 loss_relation, loss_refine = self.loss_evaluator(proposals, rel_labels, relation_logits, refine_logits,
                                                                  beta_relation_aware_gating=beta_relation_aware_gating,
                                                                  extra_info=relation_logits_lst)
-                
+
             elif self.loss_option == 'PLME_LOSS':
                 loss_relation, loss_refine = self.loss_evaluator(proposals, rel_labels, relation_logits_mean, refine_logits,
-                                                                extra_info=relation_logits_lst) 
-                
+                                                                extra_info=relation_logits_lst)
+
             else:
                 loss_relation, loss_refine = self.loss_evaluator(proposals, rel_labels, relation_logits, refine_logits,
                                                                  extra_info=relation_logits_lst)

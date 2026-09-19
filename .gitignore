@@ -55,7 +55,17 @@ datasets/vg/
 
 # Checkpoints
 checkpoints/
+*.pth
+*.pytorch
+
+# Experiment artifacts
+eval_outputs/
+*.log
+nohup.out
+*.bak
+*.bak_*
+glibc-*/
+glibc-*.tar.gz
 
 # visualization
 visualization/
-

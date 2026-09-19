@@ -61,6 +61,12 @@ class RelationLossComputation(object):
             self.rel_criterion_loss = LDAMLoss(cls_num_list=rel_class_num_lst, max_m=0.5, s=30)
             self.obj_criterion_loss = LDAMLoss(cls_num_list=obj_class_num_lst, max_m=0.5, s=30)
 
+        elif self.loss_option == 'LDAM_LOSS_PN':
+            print('starting LDAM_LOSS_PN')
+            self.rel_criterion_loss = LDAMLoss_PN(config, cls_num_list=rel_class_num_lst, max_m=0.5, s=30)
+            self.obj_criterion_loss = LDAMLoss_PN(config, cls_num_list=obj_class_num_lst, max_m=0.5, s=30)
+
+
         elif self.loss_option == 'LABEL_SMOOTHING_LOSS':
             print('starting LABEL_SMOOTHING_LOSS')
             self.criterion_loss = Label_Smoothing_Regression(e=0.01)
@@ -90,8 +96,8 @@ class RelationLossComputation(object):
                                                cls_num_list=obj_class_num_lst,
                                                use_context_aware_gating=self.use_context_aware_gating,
                                                use_relation_sampling=self.use_relation_sampling)
-            
-        
+
+
         elif self.loss_option == 'PLME_LOSS':
             print('starting PLME_LOSS')
             self.rel_criterion_loss = PLMELoss(config,
@@ -104,7 +110,7 @@ class RelationLossComputation(object):
                                                use_context_aware_gating=self.use_context_aware_gating,
                                                use_relation_sampling=self.use_relation_sampling)
 
-        
+
         elif self.loss_option == 'CAME_LOSS_WO_RW':
             print('starting CAME_LOSS')
             self.rel_criterion_loss = CAMELoss(config,
@@ -184,10 +190,10 @@ class RelationLossComputation(object):
         if self.loss_option == 'CAME_LOSS':
             # relation loss
             if self.use_relation_sampling:
-                loss_relation = self.rel_criterion_loss(relation_logits, 
-                                                        rel_labels, 
+                loss_relation = self.rel_criterion_loss(relation_logits,
+                                                        rel_labels,
                                                         beta_relation_aware_gating,
-                                                        extra_info=extra_info, 
+                                                        extra_info=extra_info,
                                                         extra_labels=extra_labels)
 
                 loss_refine_obj = self.obj_criterion_loss(refine_obj_logits,
@@ -196,8 +202,8 @@ class RelationLossComputation(object):
 
 
             elif self.use_context_aware_gating:
-                loss_relation = self.rel_criterion_loss(relation_logits, 
-                                                        rel_labels.long(), 
+                loss_relation = self.rel_criterion_loss(relation_logits,
+                                                        rel_labels.long(),
                                                         beta_relation_aware_gating,
                                                         extra_info=extra_info)
                 # obj loss refinement
@@ -210,7 +216,7 @@ class RelationLossComputation(object):
                                                         extra_info=extra_info)
                 # obj loss refinement
                 loss_refine_obj = self.obj_criterion_loss(refine_obj_logits, fg_labels.long())
-        
+
         elif self.loss_option == 'PLME_LOSS':
             # relation loss
             loss_relation = self.rel_criterion_loss(relation_logits,
@@ -278,13 +284,23 @@ class RelationLossComputation(object):
                                                         extra_info=extra_info)
                 # obj loss refinement
                 loss_refine_obj = self.obj_criterion_loss(refine_obj_logits, fg_labels.long())
-            
+
         elif self.loss_option == 'LDAM_LOSS':
             # relation loss
             loss_relation = self.rel_criterion_loss(relation_logits, rel_labels.long())
             # obj loss refinement
             loss_refine_obj = self.obj_criterion_loss(refine_obj_logits, fg_labels.long())
-            
+
+        elif self.loss_option == 'LDAM_LOSS_PN':
+            # relation loss
+            loss_relation = self.rel_criterion_loss(relation_logits,
+                                                    rel_labels.long(),
+                                                    extra_info=extra_info)
+            # obj loss refinement
+            loss_refine_obj = self.obj_criterion_loss(refine_obj_logits,
+                                                      fg_labels.long(),
+                                                      extra_info=extra_info)
+
         else:
             # relation loss
             loss_relation = self.criterion_loss(relation_logits, rel_labels.long())
@@ -305,8 +321,8 @@ class RelationLossComputation(object):
                 refine_att_logits = refine_att_logits[0].view(1, -1)
                 attribute_targets = attribute_targets[0].view(1, -1)
 
-            loss_refine_att = self.attribute_loss(refine_att_logits, attribute_targets, 
-                                             fg_bg_sample=self.attribute_sampling, 
+            loss_refine_att = self.attribute_loss(refine_att_logits, attribute_targets,
+                                             fg_bg_sample=self.attribute_sampling,
                                              bg_fg_ratio=self.attribute_bgfg_ratio)
             return loss_relation, (loss_refine_obj, loss_refine_att)
         else:
@@ -340,7 +356,7 @@ class RelationLossComputation(object):
 
             num_fg = fg_loss.shape[0]
             # if there is no fg, add at least one bg
-            num_bg = max(int(num_fg * bg_fg_ratio), 1)   
+            num_bg = max(int(num_fg * bg_fg_ratio), 1)
             perm = torch.randperm(bg_loss.shape[0], device=bg_loss.device)[:num_bg]
             bg_loss = bg_loss[perm]
 
@@ -375,6 +391,29 @@ class FocalLoss(nn.Module):
         else:
             return loss.sum()
 
+
+class FocalLoss_PN(nn.Module):
+    def __init__(self, gamma=0, alpha=None, size_average=True):
+        super().__init__()
+        self.gamma = gamma
+        self.alpha = alpha
+        self.size_average = size_average
+
+    def forward(self, input, target):
+        target = target.view(-1)
+
+        logpt = F.log_softmax(input, dim=-1)
+        logpt = logpt.index_select(-1, target).diag()
+        logpt = logpt.view(-1)
+        pt = logpt.exp()
+
+        logpt = logpt * self.alpha * (target > 0).float() + logpt * (1 - self.alpha) * (target <= 0).float()
+
+        loss = -1 * (1-pt)**self.gamma * logpt
+        if self.size_average:
+            return loss.mean()
+        else:
+            return loss.sum()
 
 # class LDAMLoss(nn.Module):
 #
@@ -507,6 +546,120 @@ class LDAMLoss(nn.Module):
         return F.cross_entropy(final_output, target, weight=self.per_cls_weights)
 
 
+class LDAMLoss_PN(nn.Module):
+    def __init__(self, config,
+                 cls_num_list=None, max_m=0.5, s=30, reweight_epoch=-1):
+        super().__init__()
+
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.num_experts = config.MODEL.ROI_RELATION_HEAD.NUM_EXPERTS
+
+        if cls_num_list is None:
+            # No cls_num_list is provided, then we cannot adjust cross entropy with LDAM.
+            self.m_list = None
+        else:
+            self.reweight_epoch = reweight_epoch
+            m_list = 1.0 / np.sqrt(np.sqrt(cls_num_list))
+            m_list = m_list * (max_m / np.max(m_list[1:]))
+
+            # m_list = m_list * (max_m / np.max(m_list))
+
+            #m_list[0] = 0.0
+            m_list = torch.tensor(m_list, dtype=torch.float, requires_grad=False)
+            self.m_list = m_list
+            self.m_list = self.m_list.to(device)
+            # print('self.m_list:', len(self.m_list), self.m_list)
+
+            assert s > 0
+            self.s = s
+            if reweight_epoch != -1:
+                idx = 1  # condition could be put in order to set idx
+                betas = [0, 0.9999]
+                effective_num = 1.0 - np.power(betas[idx], cls_num_list)
+                # print('effective_num:', effective_num)
+                per_cls_weights = (1.0 - betas[idx]) / np.array(effective_num)
+                # print('per_cls_weights:',  per_cls_weights)
+
+                # per_cls_weights[0] = 15000
+
+                per_cls_weights = per_cls_weights / np.sum(per_cls_weights) * len(cls_num_list)
+                # print('per_cls_weights:', per_cls_weights)
+
+                self.per_cls_weights_enabled = torch.tensor(per_cls_weights, dtype=torch.float, requires_grad=False)
+                self.per_cls_weights_enabled = self.per_cls_weights_enabled.to(device)
+
+            else:
+                self.per_cls_weights_enabled = None
+                self.per_cls_weights = None
+
+    def to(self, device):
+        super().to(device)
+        if self.m_list is not None:
+            self.m_list = self.m_list.to(device)
+
+        if self.per_cls_weights_enabled is not None:
+            self.per_cls_weights_enabled = self.per_cls_weights_enabled.to(device)
+
+        return self
+
+    def _hook_before_epoch(self, epoch):
+        if self.reweight_epoch != -1:
+            self.epoch = epoch
+
+            if epoch > self.reweight_epoch:
+                self.per_cls_weights = self.per_cls_weights_enabled
+            else:
+                self.per_cls_weights = None
+
+
+    def get_final_output(self, output_logits, target):
+        x = output_logits       # [1140, 51], has value
+        # print('x:', x.shape, x)
+
+        index = torch.zeros_like(x, dtype=torch.uint8, device=x.device)
+        index.scatter_(1, target.data.view(-1, 1), 1)
+        index_float = index.float()
+
+        # print('index_float:', index_float.shape, index_float)   # [74, 151], okay
+        # print('self.m_list:', self.m_list[None, :].shape, self.m_list[None, :]) # 1, 151
+
+        batch_m = torch.matmul(self.m_list[None, :], index_float.transpose(0, 1))
+        # print('batch_m:', batch_m.shape, batch_m)       # [1, 74],  all nan
+
+        batch_m = batch_m.view((-1, 1))
+        # print('batch_m:', batch_m.shape, batch_m)
+
+        x_m = x - batch_m * self.s
+        # print('x_m:', x_m.shape, x_m)
+
+        final_output = torch.where(index, x_m, x)
+        # print('final_output:', final_output.shape, final_output)
+
+        return final_output
+
+    def forward(self, output_logits, target, extra_info=None):
+        loss = 0.0
+        print('len(extra_info):', len(extra_info))
+        for logits_item in extra_info:
+            for logit in logits_item:
+                print('logit.shape:', logit.shape)
+
+            logits_item = torch.cat(logits_item, dim=0)
+
+            print('logits_item:', logits_item.shape)
+            print('target shape:', target.shape)
+
+            loss += F.cross_entropy(logits_item, target, weight=self.per_cls_weights)
+
+        return loss / self.num_experts
+
+    # def forward(self, output_logits, target):
+    #     if self.m_list is None:
+    #         return F.cross_entropy(output_logits, target)
+
+    #     final_output = self.get_final_output(output_logits, target)
+    #     return F.cross_entropy(final_output, target, weight=self.per_cls_weights)
+
 class CAMELoss(nn.Module):
     def __init__(self, config,
                  cls_num_list=None, use_context_aware_gating=False, use_relation_sampling=False,
@@ -538,7 +691,7 @@ class CAMELoss(nn.Module):
             # cls_num_list[0] = 619237.0
             cls_num_list[0] = 33864.0
             # cls_num_list[0] = 0.0
-            
+
             # cls_num_list[0] = 150000.0
             print('cls_num_list:', cls_num_list)
             print(len(cls_num_list))
@@ -802,23 +955,27 @@ class CAMELoss(nn.Module):
 
         # print('self.m_list:', self.m_list)
         for logits_item in extra_info:
-            
+            # no long-tailed distribution
             if self.m_list is None:
                 # print('logits_item:', logits_item, len(logits_item), logits_item[0].shape, logits_item[1].shape)
                 logits_item = torch.cat(logits_item, dim=0)
                 # print('logits_item:', logits_item.shape)
 
                 # print('target:', target.shape)
-               
+
 
                 loss += self.base_loss_factor * self.base_loss(logits_item, target)
 
+            # long-tailed distribution
             else:
+
+                # not use relation sampling
                 if not self.use_relation_sampling:
                     # print('logits_item:', logits_item[0].shape)
                     logits_item = self.get_final_output(logits_item, target)
                     # print('logits_item final:', logits_item.shape)
 
+                # use relation sampling
                 if self.use_relation_sampling:
                     if self.use_context_aware_gating:
                         # if self.num_experts == 3:
@@ -852,20 +1009,28 @@ class CAMELoss(nn.Module):
                         #     loss += self.base_loss_factor * self.base_loss(logits_item, target,
                         #                                                    weight=self.per_cls_weights_base) * beta_relation_aware_gating[expert_num]
 
-                        loss += self.base_loss_factor * self.base_loss(logits_item,
-                                                                       target,
-                                                                       weight=self.per_cls_weights_base) * beta_relation_aware_gating[expert_num]
-
+                        # long-tailed rw
                         # loss += self.base_loss_factor * self.base_loss(logits_item,
                         #                                                target,
-                        #                                                weight=self.per_cls_gaussian_weights) * \
-                        #         beta_relation_aware_gating[expert_num]
+                        #                                                weight=self.per_cls_weights_base) * beta_relation_aware_gating[expert_num]
+
+                        # no long-tailed rw
+                        loss += self.base_loss_factor * self.base_loss(logits_item,
+                                                                       target) * beta_relation_aware_gating[expert_num]
+
+                        # with gaussian rw
+                        # loss += self.base_loss_factor * self.base_loss(logits_item,
+                        #                                                target,
+                        #                                                weight=self.per_cls_gaussian_weights) * beta_relation_aware_gating[expert_num]
                         # print('loss:', loss)
 
                     else:
-                        loss += self.base_loss_factor * self.base_loss(logits_item,
-                                                                       target,
-                                                                       weight=self.per_cls_weights_base)
+                        # CB Loss
+                        # loss += self.base_loss_factor * self.base_loss(logits_item,
+                        #                                                target,
+                        #                                                weight=self.per_cls_weights_base)
+                        # Pure CE Loss
+                        loss += self.base_loss_factor * self.base_loss(logits_item, target)
 
             expert_num = expert_num + 1
 
@@ -892,7 +1057,9 @@ class CAMELoss(nn.Module):
 
         self.batch_size = len(extra_info[0])
         if self.use_context_aware_gating:
-            return loss / self.batch_size
+            # return loss / self.batch_size # good performance
+            return loss
+
             # return loss
         else:
             return loss / (self.num_experts * self.batch_size)
@@ -922,9 +1089,24 @@ class PLMELoss(nn.Module):
         print('cls_num_lst:', cls_num_list)
         cls_num_list[0] = 200000.0
 
+
         self.label_grouping = label_grouping(config)
-        self.label_group_dic = self.label_grouping.obtain_group_labels()
+
+        # our methods, divide-and-vote
+        if self.expert_mode == 'hubmblbt_ub_mb_lb_t':
+            self.label_group_dic = self.label_grouping.partition_dataset_with_five_parts()  # five parts
+
+        elif self.expert_mode == 'hublbt_ub_lb_t':
+            self.label_group_dic = self.label_grouping.partition_dataset_with_four_parts()  # four parts
+
+        else:
+            self.label_group_dic = self.label_grouping.obtain_group_labels()                # three parts
+
         print('self.label_group_dic:', self.label_group_dic)
+
+        # bagging methods
+        # self.label_group_dic = self.label_grouping.obtain_random_group_labels()
+        # print('self.label_group_dic:', self.label_group_dic)
 
         if cls_num_list is None:
             # No cls_num_list is provided, then we cannot adjust cross entropy with LDAM.
@@ -1045,6 +1227,9 @@ class PLMELoss(nn.Module):
         target_h = []
         target_m = []
         target_t = []
+        target_ub = []
+        target_lb = []
+        target_mb = []
         # expert_mode = 'hmt_mt_t'     # 'h_m_t', 'hmt_m_t', 'hmt_mt_t'
         # expert_mode = 'hmt_m_t'
         # expert_mode = 'h_m_t'
@@ -1195,6 +1380,50 @@ class PLMELoss(nn.Module):
 
                 return target, target_h, target_m, target_t
 
+            elif self.expert_mode == 'hublbt_ub_lb_t':
+                for i in range(target.shape[0]):
+                    label = target[i]
+
+                    # if self.label_group_dic[label.item()] == 'head':
+                    #     target_h.append(label.item())
+                    #     target_ub.append(0)
+                    #     target_lb.append(0)
+                    #     target_t.append(0)
+
+                    if self.label_group_dic[label.item()] == 'upper_body':
+                        target_h.append(0)
+                        target_ub.append(label.item())
+                        target_lb.append(0)
+                        target_t.append(0)
+
+                    elif self.label_group_dic[label.item()] == 'lower_body':
+                        target_h.append(0)
+                        target_ub.append(0)
+                        target_lb.append(label.item())
+                        target_t.append(0)
+
+                    elif self.label_group_dic[label.item()] == 'tail':
+                        target_h.append(0)
+                        target_ub.append(0)
+                        target_lb.append(0)
+                        target_t.append(label.item())
+
+                    # do not use head information in other peers
+                    elif self.label_group_dic[label.item()] == 'head':
+                        target_h.append(0)
+                        target_ub.append(0)
+                        target_lb.append(0)
+                        target_t.append(0)
+
+                # print('target:', len(target))
+                # print('target_h:', len(target_h))
+                # print('target_ub:', len(target_ub))
+                # print('target_lb:', len(target_lb))
+                # print('target_t:', len(target_t))
+
+                return target, target_ub, target_lb, target_t
+
+
             elif self.expert_mode == 'hbt_hb_ht_bt':
                 for i in range(target.shape[0]):
                     label = target[i]
@@ -1218,6 +1447,49 @@ class PLMELoss(nn.Module):
                 return target, target_h, target_m, target_t
 
 
+        elif self.num_experts == 5:
+            if self.expert_mode == 'hubmblbt_ub_mb_lb_t':
+                for i in range(target.shape[0]):
+                    label = target[i]
+
+                    # print('label:', label.item())
+                    if self.label_group_dic[label.item()] == 'head':
+                        target_h.append(0)
+                        target_ub.append(0)
+                        target_mb.append(0)
+                        target_lb.append(0)
+                        target_t.append(0)
+
+                    elif self.label_group_dic[label.item()] == 'upper_body':
+                        target_h.append(0)
+                        target_ub.append(label.item())
+                        target_mb.append(0)
+                        target_lb.append(0)
+                        target_t.append(0)
+
+                    elif self.label_group_dic[label.item()] == 'middle_body':
+                        target_h.append(0)
+                        target_ub.append(0)
+                        target_mb.append(label.item())
+                        target_lb.append(0)
+                        target_t.append(0)
+
+                    elif self.label_group_dic[label.item()] == 'lower_body':
+                        target_h.append(0)
+                        target_ub.append(0)
+                        target_mb.append(0)
+                        target_lb.append(label.item())
+                        target_t.append(0)
+
+                    elif self.label_group_dic[label.item()] == 'tail':
+                        target_h.append(0)
+                        target_ub.append(0)
+                        target_mb.append(0)
+                        target_lb.append(0)
+                        target_t.append(label.item())
+
+
+                return target, target_ub, target_mb, target_lb, target_t
 
     def forward(self, output_logits, target, beta_relation_aware_gating=None, extra_info=None, extra_labels=None):
 
@@ -1258,6 +1530,15 @@ class PLMELoss(nn.Module):
             target_t = torch.tensor(target_t).cuda()
             target_l = torch.tensor(target_l).cuda()
 
+        elif self.num_experts == 5:
+            target_h, target_ub, target_mb, target_lb, target_t = self.label_assignment(target)
+
+            target_h = torch.tensor(target_h).cuda()
+            target_ub = torch.tensor(target_ub).cuda()
+            target_mb = torch.tensor(target_mb).cuda()
+            target_lb = torch.tensor(target_lb).cuda()
+            target_t = torch.tensor(target_t).cuda()
+
         # target_h = torch.cat(target_h, dim=0)
         # target_m = torch.cat(target_m, dim=0)
         # target_t = torch.cat(target_t, dim=0)
@@ -1287,6 +1568,7 @@ class PLMELoss(nn.Module):
                 # print('len of extra_labels[expert_num]:', len(extra_labels[expert_num]), extra_labels[expert_num])
                 # print('len of logits_item:', len(logits_item), len(logits_item[0]), logits_item)
 
+                # relation sampling
                 if self.use_relation_sampling:
                     if self.use_context_aware_gating:
                         loss += self.base_loss_factor * self.base_loss(logits_item, extra_labels[expert_num],
@@ -1295,6 +1577,7 @@ class PLMELoss(nn.Module):
                     else:
                         loss += self.base_loss_factor * self.base_loss(logits_item, extra_labels[expert_num],
                                                                        weight=self.per_cls_weights_base)
+                # CAPN
                 else:
                     if self.use_context_aware_gating:
                         # print('logits_item.shape:', logits_item.shape)
@@ -1309,7 +1592,7 @@ class PLMELoss(nn.Module):
                         loss += self.base_loss_factor * self.base_loss(logits_item, target,
                                                                        weight=self.per_cls_weights_base) * beta_relation_aware_gating[expert_num]
 
-
+                    # Peer Learning
                     else:
                         if self.num_experts == 3:
                             if (expert_num == 0):
@@ -1349,6 +1632,28 @@ class PLMELoss(nn.Module):
                             elif (expert_num == 3):
                                 target = target_l
                                 self.base_loss_factor = 1.0
+
+                        elif self.num_experts == 5:
+                            if (expert_num == 0):
+                                target = target_h
+                                self.base_loss_factor = 2.0
+
+                            elif (expert_num == 1):
+                                target = target_ub
+                                self.base_loss_factor = 1.0
+
+                            elif (expert_num == 2):
+                                target = target_mb
+                                self.base_loss_factor = 1.0
+
+                            elif (expert_num == 3):
+                                target = target_lb
+                                self.base_loss_factor = 1.0
+
+                            elif (expert_num == 4):
+                                target = target_t
+                                self.base_loss_factor = 1.0
+
 
                         loss += self.base_loss_factor * self.base_loss(logits_item, target,
                                                                        weight=self.per_cls_weights_base)
@@ -1629,7 +1934,7 @@ class RIDELoss(nn.Module):
             # print('kl_loss:', kl_loss) # ~-0.19
 
             # loss += kl_loss
-            
+
         # loss = loss / (self.num_experts * self.batch_size)
 
         self.batch_size = len(extra_info[0])

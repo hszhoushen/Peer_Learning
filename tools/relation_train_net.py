@@ -8,10 +8,12 @@ Basic training script for PyTorch
 from maskrcnn_benchmark.utils.env import setup_environment  # noqa F401 isort:skip
 
 import argparse
-import os
-import time
 import datetime
+import os
+import random
+import time
 
+import numpy as np
 import torch
 from torch.nn.utils import clip_grad_norm_
 
@@ -45,13 +47,13 @@ except ImportError:
 
 def train(cfg, local_rank, distributed, logger):
     debug_print(logger, 'prepare training')
-    model = build_detection_model(cfg) 
+    model = build_detection_model(cfg)
     debug_print(logger, 'end model construction')
 
     # modules that should be always set in eval mode
     # their eval() method should be called after model.train() is called
     eval_modules = (model.rpn, model.backbone, model.roi_heads.box,)
- 
+
     fix_eval_modules(eval_modules)
 
     # NOTE, we slow down the LR of the layers start with the names in slow_heads
@@ -83,7 +85,7 @@ def train(cfg, local_rank, distributed, logger):
     # load pretrain layers to new layers
     load_mapping = {"roi_heads.relation.box_feature_extractor" : "roi_heads.box.feature_extractor",
                     "roi_heads.relation.union_feature_extractor.feature_extractor" : "roi_heads.box.feature_extractor"}
-    
+
     if cfg.MODEL.ATTRIBUTE_ON:
         load_mapping["roi_heads.relation.att_feature_extractor"] = "roi_heads.attribute.feature_extractor"
         load_mapping["roi_heads.relation.union_feature_extractor.att_feature_extractor"] = "roi_heads.attribute.feature_extractor"
@@ -120,7 +122,7 @@ def train(cfg, local_rank, distributed, logger):
     )
     # if there is certain checkpoint in output_dir, load it, else load pretrained detector
     if checkpointer.has_checkpoint():
-        extra_checkpoint_data = checkpointer.load(cfg.MODEL.PRETRAINED_DETECTOR_CKPT, 
+        extra_checkpoint_data = checkpointer.load(cfg.MODEL.PRETRAINED_DETECTOR_CKPT,
                                        update_schedule=cfg.SOLVER.UPDATE_SCHEDULE_DURING_LOAD)
         arguments.update(extra_checkpoint_data)
     else:
@@ -195,7 +197,7 @@ def train(cfg, local_rank, distributed, logger):
         # Otherwise apply loss scaling for mixed-precision recipe
         with amp.scale_loss(losses, optimizer) as scaled_losses:
             scaled_losses.backward()
-        
+
         # add clip_grad_norm from MOTIFS, tracking gradient, used for debug
         verbose = (iteration % cfg.SOLVER.PRINT_GRAD_FREQ) == 0 or print_first_grad # print grad or not
         print_first_grad = False
@@ -256,7 +258,7 @@ def train(cfg, local_rank, distributed, logger):
             logger.info("Start validating")
             val_result = run_val(cfg, model, val_data_loaders, distributed, logger)
             logger.info("Validation Result: %.4f" % val_result)
- 
+
         # scheduler should be called after optimizer.step() in pytorch>=1.1.0
         # https://pytorch.org/docs/stable/optim.html#how-to-adjust-learning-rate
         if cfg.SOLVER.SCHEDULE.TYPE == "WarmupReduceLROnPlateau":
@@ -367,6 +369,17 @@ def run_test(cfg, model, distributed, logger):
         )
         synchronize()
 
+def set_seed(seed: int):
+    random.seed(seed)                           # Python random module
+    np.random.seed(seed)                        # NumPy
+    torch.manual_seed(seed)                     # CPU
+    torch.cuda.manual_seed(seed)                # Current GPU
+    torch.cuda.manual_seed_all(seed)            # All GPUs (if using multi-GPU)
+
+    torch.backends.cudnn.deterministic = True   # For deterministic algorithms
+    torch.backends.cudnn.benchmark = False      # Disable to avoid randomness
+
+
 def parser_argument(cfg):
     parser = argparse.ArgumentParser(description="PyTorch Relation Detection Training")
     parser.add_argument(
@@ -401,6 +414,8 @@ def parser_argument(cfg):
         type=int,
         help="configure the number of experts for training",
     )
+    parser.add_argument("--seed", type=int, default=42)
+
 
     args = parser.parse_args()
 
@@ -409,7 +424,7 @@ def parser_argument(cfg):
 def main():
     args = parser_argument(cfg)
     # cfg.MODEL.OBJ_CLASS_NUM_LST
-
+    set_seed(args.seed)
 
     num_gpus = int(os.environ["WORLD_SIZE"]) if "WORLD_SIZE" in os.environ else 1
     args.distributed = num_gpus > 1
@@ -428,6 +443,7 @@ def main():
     print('cfg.MODEL.ROI_RELATION_HEAD.LOSS_OPTION:', cfg.MODEL.ROI_RELATION_HEAD.LOSS_OPTION)
     cfg.MODEL.ROI_RELATION_HEAD.NUM_EXPERTS = args.num_experts
     print('cfg.MODEL.ROI_RELATION_HEAD.NUM_EXPERTS:', cfg.MODEL.ROI_RELATION_HEAD.NUM_EXPERTS)
+    print('cfg.MODEL.ROI_RELATION_HEAD.KNOWLEDGE_WEIGHTS:', cfg.MODEL.ROI_RELATION_HEAD.KNOWLEDGE_WEIGHTS)
 
     output_dir = cfg.OUTPUT_DIR
     if output_dir:

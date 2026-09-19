@@ -14,8 +14,8 @@ class label_grouping(object):
         self.checkpoint_name = checkpoint.split('/')[-1]
         if self.checkpoint_name == 'oiv6_det.pth':
             #  31 relations, 10 head, 10 body, 11 tail
-            self.rel_lst =  [200000.0, 115251.0, 33018.0, 102653.0, 240.0, 1332.0, 189.0, 67.0, 34684.0, 12223.0, 
-                             3460.0, 287.0, 96.0, 10.0, 3916.0, 82.0, 11.0, 20149.0, 87.0, 1797.0, 
+            self.rel_lst =  [200000.0, 115251.0, 33018.0, 102653.0, 240.0, 1332.0, 189.0, 67.0, 34684.0, 12223.0,
+                             3460.0, 287.0, 96.0, 10.0, 3916.0, 82.0, 11.0, 20149.0, 87.0, 1797.0,
                              11.0, 4192.0, 1988.0, 151.0, 54.0, 950.0, 22.0, 524.0, 75.0, 10881.0, 160.0]
         else:
             #  51 relations, 15 head, 15 body, 21 tail
@@ -23,6 +23,91 @@ class label_grouping(object):
                             397.0, 460.0, 565.0, 4.0, 809.0, 163.0, 157.0, 663.0, 67144.0, 10764.0, 21748.0, 3167.0, 752.0, 676.0,
                             364.0, 114.0, 234.0, 15300.0, 31347.0, 109355.0, 333.0, 793.0, 151.0, 601.0, 429.0, 71.0,
                             4260.0, 44.0, 5086.0, 2273.0, 299.0, 3757.0, 551.0, 270.0, 1225.0, 352.0, 47326.0, 4810.0, 11059.0]
+
+
+    def partition_dataset_with_four_parts(self):
+        """
+        Partition the dataset into four parts: head, upper body, lower body, and tail.
+        """
+        rel_dic = {}
+
+        for i in range(len(self.rel_lst)):
+            rel_dic.update({i: self.rel_lst[i]})
+
+        # print('rel_dic:', rel_dic)
+        rel_dic_sorted = sorted(rel_dic.items(), key=lambda x: x[1], reverse=True)
+
+        if self.checkpoint_name == 'oiv6_det.pth':
+            for k, v in enumerate(rel_dic_sorted):
+                if (k >= 0 and k < 10):
+                    rel_dic[v[0]] = 'head'
+                elif (k >= 10 and k < 20):
+                    rel_dic[v[0]] = 'upper body'
+                elif (k >= 20 and k < 30):
+                    rel_dic[v[0]] = 'lower body'
+                else:
+                    rel_dic[v[0]] = 'tail'
+
+        # if the dataset is visual genome
+        else:
+            k_h = 13
+            k_ub = 25
+            k_lb = 38
+            for k, v in enumerate(rel_dic_sorted):
+                if (k >= 0 and k < k_h):
+                    rel_dic[v[0]] = 'head'
+                elif (k >= k_h and k < k_ub):
+                    rel_dic[v[0]] = 'upper_body'
+                elif (k >= k_ub and k < k_lb):
+                    rel_dic[v[0]] = 'lower_body'
+                else:
+                    rel_dic[v[0]] = 'tail'
+
+        return rel_dic
+
+    def partition_dataset_with_five_parts(self):
+        """
+        Partition the dataset into five parts: head, upper body, middle body, lower body, and tail.
+        """
+        rel_dic = {}
+        for i in range(len(self.rel_lst)):
+            rel_dic.update({i: self.rel_lst[i]})
+
+        # print('rel_dic:', rel_dic)
+        rel_dic_sorted = sorted(rel_dic.items(), key=lambda x: x[1], reverse=True)
+
+        if self.checkpoint_name == 'oiv6_det.pth':
+            for k, v in enumerate(rel_dic_sorted):
+                if (k >= 0 and k < 10):
+                    rel_dic[v[0]] = 'head'
+                elif (k >= 10 and k < 20):
+                    rel_dic[v[0]] = 'upper_body'
+                elif (k >= 20 and k < 30):
+                    rel_dic[v[0]] = 'middle_body'
+                elif (k >= 30 and k < 40):
+                    rel_dic[v[0]] = 'lower_body'
+                else:
+                    rel_dic[v[0]] = 'tail'
+
+        # if the dataset is visual genome
+        else:
+            k_h = 10
+            k_ub = 20
+            k_mb = 30
+            k_lb = 40
+            for k, v in enumerate(rel_dic_sorted):
+                if (k >= 0 and k < k_h):
+                    rel_dic[v[0]] = 'head'
+                elif (k >= k_h and k < k_ub):
+                    rel_dic[v[0]] = 'upper_body'
+                elif (k >= k_ub and k < k_mb):
+                    rel_dic[v[0]] = 'middle_body'
+                elif (k >= k_mb and k < k_lb):
+                    rel_dic[v[0]] = 'lower_body'
+                else:
+                    rel_dic[v[0]] = 'tail'
+
+        return rel_dic
 
     def obtain_group_labels(self):
         rel_dic = {}
@@ -41,33 +126,51 @@ class label_grouping(object):
                 if (k >= 0 and k < 10):
                     rel_dic[v[0]] = 'head'
                 elif (k >= 10 and k < 20):
-                    
+
                     rel_dic[v[0]] = 'body'
                 else:
                     rel_dic[v[0]] = 'tail'
-        
+
+        # if the dataset is visual genome
         else:
+            k_h = 15
+            k_b = 30
             for k, v in enumerate(rel_dic_sorted):
-                if (k >= 0 and k < 15):
-                    # rel_head_labels.append(v[0])
+                if (k >= 0 and k < k_h):
                     rel_dic[v[0]] = 'head'
-
-                    # print(rel_dic[v[0]])
-                elif (k >= 15 and k < 30):
-                    # rel_medium_labels.append(v[0])
+                elif (k >= k_h and k < k_b):
                     rel_dic[v[0]] = 'body'
-
-                    # print(rel_dic[v[0]])
-
                 else:
-                    # rel_tail_labels.append(v[0])
                     rel_dic[v[0]] = 'tail'
 
-                # print(rel_dic[v[0]])
+        return rel_dic
 
-        # print('rel_head_labels:', rel_head_labels)
-        # print('rel_medium_labels:', rel_medium_labels)
-        # print('rel_tail_labels:', rel_tail_labels)
+    def obtain_random_group_labels(self):
+        rel_dic = {}
+        for i in range(len(self.rel_lst)):
+            rel_dic.update({i: self.rel_lst[i]})
+
+        indices = list(range(len(self.rel_lst)))
+        random.shuffle(indices)
+
+        if self.checkpoint_name == 'oiv6_det.pth':
+            head_indices = indices[:10]
+            body_indices = indices[10:20]
+            tail_indices = indices[20:]
+
+        else:
+            head_indices = indices[:15]
+            body_indices = indices[15:30]
+            tail_indices = indices[30:]
+
+        for idx in head_indices:
+            rel_dic[idx] = 'head'
+
+        for idx in body_indices:
+            rel_dic[idx] = 'body'
+
+        for idx in tail_indices:
+            rel_dic[idx] = 'tail'
 
         return rel_dic
 
@@ -76,7 +179,7 @@ class label_grouping(object):
         sorted_class_ids = sorted_indices.tolist()
 
         peer_knowledge_lst = []
-        
+
         if self.checkpoint_name == 'oiv6_det.pth':
             if expert_mode == 'hbt_b_t':
                 head_labels = sorted_class_ids
@@ -102,18 +205,18 @@ class label_grouping(object):
                 peer_knowledge_lst.append(head_labels)
                 peer_knowledge_lst.append(head_tail_labels)
                 peer_knowledge_lst.append(body_tail_labels)
-        
+
         else:
             if expert_mode == 'hbt_b_t':
                 print('expert_mode:', expert_mode, '[]-[15:30]-[30:]', '1:1:1')
                 head_labels = sorted_class_ids
                 body_labels = sorted_class_ids[15:30]
                 tail_labels = sorted_class_ids[30:]
-                
+
                 peer_knowledge_lst.append(head_labels)
                 peer_knowledge_lst.append(body_labels)
                 peer_knowledge_lst.append(tail_labels)
-                
+
                 tail_weight = np.sum(tail_labels) / np.sum(peer_knowledge_lst)
 
             elif expert_mode == 'h_b_t':
@@ -133,7 +236,7 @@ class label_grouping(object):
                 peer_knowledge_lst.append(head_labels)
                 peer_knowledge_lst.append(head_tail_labels)
                 peer_knowledge_lst.append(body_tail_labels)
-            
+
             elif expert_mode == 'hb_ht_bt':
                 head_body_labels = sorted_class_ids[0:30]
                 head_tail_labels = sorted_class_ids[:15] + sorted_class_ids[30:]  # Head and tail together
@@ -142,29 +245,54 @@ class label_grouping(object):
                 peer_knowledge_lst.append(head_body_labels)
                 peer_knowledge_lst.append(head_tail_labels)
                 peer_knowledge_lst.append(body_tail_labels)
-            
+
+            elif expert_mode == 'hublbt_ub_lb_t':
+                all_labels = sorted_class_ids
+                upper_body_labels = sorted_class_ids[13:25]
+                lower_body_labels = sorted_class_ids[25:38]
+                tail_labels = sorted_class_ids[38:]
+
+                peer_knowledge_lst.append(all_labels)
+                peer_knowledge_lst.append(upper_body_labels)
+                peer_knowledge_lst.append(lower_body_labels)
+                peer_knowledge_lst.append(tail_labels)
+
+
+            elif expert_mode == 'hubmblbt_ub_mb_lb_t':
+                all_labels = sorted_class_ids
+                upper_body_labels = sorted_class_ids[10:20]
+                middle_body_labels = sorted_class_ids[20:30]
+                lower_body_labels = sorted_class_ids[30:40]
+                tail_labels = sorted_class_ids[40:]
+
+                peer_knowledge_lst.append(all_labels)
+                peer_knowledge_lst.append(upper_body_labels)
+                peer_knowledge_lst.append(middle_body_labels)
+                peer_knowledge_lst.append(lower_body_labels)
+                peer_knowledge_lst.append(tail_labels)
+
             elif expert_mode == 'hbt_h_b_t':
                 all_labels = sorted_class_ids
                 head_labels = sorted_class_ids[:10]
                 body_labels = sorted_class_ids[10:20]
                 tail_labels = sorted_class_ids[20:]
-                
+
                 peer_knowledge_lst.append(all_labels)
                 peer_knowledge_lst.append(head_labels)
                 peer_knowledge_lst.append(body_labels)
                 peer_knowledge_lst.append(tail_labels)
-                
+
             elif expert_mode == 'hbt_hb_ht_bt':
                 all_labels = sorted_class_ids
                 head_body_labels = sorted_class_ids[0:30]
                 head_tail_labels = sorted_class_ids[:15] + sorted_class_ids[30:]  # Head and tail together
                 body_tail_labels = sorted_class_ids[15:]  # Body and tail together
-                
+
                 peer_knowledge_lst.append(all_labels)
                 peer_knowledge_lst.append(head_body_labels)
                 peer_knowledge_lst.append(head_tail_labels)
-                peer_knowledge_lst.append(body_tail_labels)    
-                
+                peer_knowledge_lst.append(body_tail_labels)
+
             elif expert_mode == 'hbt_bt_t':
                 head_labels = sorted_class_ids
                 body_tail_labels = sorted_class_ids[15:]  # Body and tail together
@@ -173,22 +301,23 @@ class label_grouping(object):
                 peer_knowledge_lst.append(head_labels)
                 peer_knowledge_lst.append(body_tail_labels)
                 peer_knowledge_lst.append(tail_labels)
-                
+
             elif expert_mode == 'hbt_b':
                 head_labels = sorted_class_ids
                 body_labels = sorted_class_ids[15:30]
                 peer_knowledge_lst.append(head_labels)
                 peer_knowledge_lst.append(body_labels)
-                
+
             elif expert_mode == 'hbt_t':
                 head_labels = sorted_class_ids
                 tail_labels = sorted_class_ids[30:]
                 peer_knowledge_lst.append(head_labels)
-                peer_knowledge_lst.append(tail_labels)    
-                    
+                peer_knowledge_lst.append(tail_labels)
+
+
         return peer_knowledge_lst
 
-            
+
         # if self.checkpoint_name == 'oiv6_det.pth':
         #     if expert_mode == 'hbt_b_t':
         #         head_labels = sorted_class_ids
@@ -197,7 +326,7 @@ class label_grouping(object):
         #         peer_knowledge_lst.append(head_labels)
         #         peer_knowledge_lst.append(body_labels)
         #         peer_knowledge_lst.append(tail_labels)
-                
+
         #     elif expert_mode == 'h_b_t':
         #         head_labels = sorted_class_ids[:16]
         #         body_labels = sorted_class_ids[16:36]
@@ -214,7 +343,7 @@ class label_grouping(object):
         #         peer_knowledge_lst.append(head_body_labels)
         #         peer_knowledge_lst.append(head_tail_labels)
         #         peer_knowledge_lst.append(body_tail_labels)
-        
+
         # else:
         #     if expert_mode == 'hbt_b_t':
         #         head_labels = sorted_class_ids
@@ -223,7 +352,7 @@ class label_grouping(object):
         #         peer_knowledge_lst.append(head_labels)
         #         peer_knowledge_lst.append(body_labels)
         #         peer_knowledge_lst.append(tail_labels)
-                
+
         #     elif expert_mode == 'h_b_t':
         #         head_labels = sorted_class_ids[:16]
         #         body_labels = sorted_class_ids[16:36]

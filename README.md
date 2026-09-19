@@ -1,194 +1,156 @@
 # Peer Learning for Unbiased Scene Graph Generation
 
-[![LICENSE](https://img.shields.io/badge/license-MIT-green)](https://github.com/KaihuaTang/Scene-Graph-Benchmark.pytorch/blob/master/LICENSE)
-[![Python](https://img.shields.io/badge/python-3.7-blue.svg)](https://www.python.org/)
-![PyTorch](https://img.shields.io/badge/pytorch-1.4.0-%237732a8)
+Official PyTorch implementation of:
 
-Pytorch implementation of paper:
-
-Peer Learning for Unbiased Scene Graph Generation
-
-
-
-## Contents
-
-1. [Overview](#Overview)
-2. [Install the Requirements](INSTALL.md)
-3. [Prepare the Dataset](DATASET.md)
-4. [Metrics and Results for our Toolkit](METRICS.md)
-    - [Explanation of R@K, mR@K, zR@K, ng-R@K, ng-mR@K, ng-zR@K, A@K, S2G](METRICS.md#explanation-of-our-metrics)
-    - [Output Format](METRICS.md#output-format-of-our-code)
-    - [Reported Results](METRICS.md#reported-results)
-5. [Faster R-CNN Pre-training](#pretrained-models)
-6. [Scene Graph Generation as RoI_Head](#scene-graph-generation-as-RoI_Head)
-7. [Training on Scene Graph Generation](#perform-training-on-scene-graph-generation)
-8. [Evaluation on Scene Graph Generation](#Evaluation)
-9. [**Detect Scene Graphs on Your Custom Images** :star2:](#SGDet-on-custom-images)
-10. [**Visualize Detected Scene Graphs of Custom Images** :star2:](#Visualize-Detected-SGs-of-Custom-Images)
-11. [Other Options that May Improve the SGG](#other-options-that-may-improve-the-SGG)
-12. [Tips and Tricks for TDE on any Unbiased Task](#tips-and-Tricks-for-any-unbiased-taskX-from-biased-training)
-13. [Frequently Asked Questions](#frequently-asked-questions)
-14. [Citations](#Citations)
+> **Peer Learning Approach to Unbiased Scene Graph Generation for Traffic Scene Understanding**
+> Liguang Zhou, Junjie Hu, Yuhongze Zhou, Tin Lun Lam, and Yangsheng Xu
+> *IEEE Transactions on Intelligent Transportation Systems*, 27(2):2365-2379, 2026
+> [DOI: 10.1109/TITS.2025.3635279](https://doi.org/10.1109/TITS.2025.3635279)
 
 ## Overview
 
-This project aims to build a new CODEBASE of Scene Graph Generation (SGG), and it is also a Pytorch implementation of the paper [Unbiased Scene Graph Generation from Biased Training](https://arxiv.org/abs/2002.11949). The previous widely adopted SGG codebase [neural-motifs](https://github.com/rowanz/neural-motifs) is detached from the recent development of Faster/Mask R-CNN. Therefore, I decided to build a scene graph benchmark on top of the well-known [maskrcnn-benchmark](https://github.com/facebookresearch/maskrcnn-benchmark) project and define relationship prediction as an additional roi_head. By the way, thanks to their elegant framework, this codebase is much more novice-friendly and easier to read/modify for your own projects than previous neural-motifs framework(at least I hope so). It is a pity that when I was working on this project, the [detectron2](https://github.com/facebookresearch/detectron2) had not been released, but I think we can consider [maskrcnn-benchmark](https://github.com/facebookresearch/maskrcnn-benchmark) as a more stable version with less bugs, hahahaha. I also introduce all the old and new metrics used in SGG, and clarify two common misunderstandings in SGG metrics in [METRICS.md](METRICS.md), which cause abnormal results in some papers.
+Peer Learning addresses the long-tailed predicate distribution in scene graph generation (SGG) through three specialized peers. Training samples are divided into head, body, and tail-oriented subsets, and the peers exchange knowledge through a peer-learning objective. At inference time, their predictions are combined by expertise-aware consensus voting.
 
-### 
+The implementation supports:
 
-Models | SGGen R@20 | SGGen R@50 | SGGen R@100 | SGCls R@20 | SGCls R@50 | SGCls R@100 | PredCls R@20 | PredCls R@50 | PredCls R@100
--- | -- | -- | -- | -- | -- | -- | -- | -- | -- 
-VCTree | 24.53 | 31.93 | 36.21 | 42.77 | 46.67 | 47.64 | 59.02 | 65.42 | 67.18
+- three SGG backbones: Motifs, VCTree, and Transformer;
+- three Visual Genome protocols: PredCls, SGCls, and SGDet;
+- Open Images V6 SGDet experiments;
+- configurable peer number, sample-partition mode, random seed, and voting weights.
 
-Note that all results of VCTree should be better than what we reported in [Unbiased Scene Graph Generation from Biased Training](https://arxiv.org/abs/2002.11949), because we optimized the tree construction network after the publication.
-
-### The illustration of the Unbiased SGG from 'Unbiased Scene Graph Generation from Biased Training'
-
-![alt text](demo/teaser_figure.png "from 'Unbiased Scene Graph Generation from Biased Training'")
+This repository is based on [Scene-Graph-Benchmark.pytorch](https://github.com/KaihuaTang/Scene-Graph-Benchmark.pytorch). The original baseline and experimental scripts are retained for reference, while the reproducible Peer Learning entry points are under `scripts/PLME/`.
 
 ## Installation
 
-Check [INSTALL.md](INSTALL.md) for installation instructions.
-
-## Dataset
-
-Check [DATASET.md](DATASET.md) for instructions of dataset preprocessing.
-
-## Metrics and Results **(IMPORTANT)**
-Explanation of metrics in our toolkit and reported results are given in [METRICS.md](METRICS.md)
-
-## Pretrained Models
-
-Since we tested many SGG models in our paper [Unbiased Scene Graph Generation from Biased Training](https://arxiv.org/abs/2002.11949), I won't upload all the pretrained SGG models here. However, you can download the [pretrained Faster R-CNN](https://onedrive.live.com/embed?cid=22376FFAD72C4B64&resid=22376FFAD72C4B64%21779870&authkey=AH5CPVb9g5E67iQ) we used in the paper, which is the most time consuming step in the whole training process (it took 4 2080ti GPUs). As to the SGG model, you can follow the rest instructions to train your own, which only takes 2 GPUs to train each SGG model. The results should be very close to the reported results given in [METRICS.md](METRICS.md)
-
-After you download the [Faster R-CNN model](https://onedrive.live.com/embed?cid=22376FFAD72C4B64&resid=22376FFAD72C4B64%21779870&authkey=AH5CPVb9g5E67iQ), please extract all the files to the directory `/home/username/checkpoints/pretrained_faster_rcnn`. To train your own Faster R-CNN model, please follow the next section.
-
-The above pretrained Faster R-CNN model achives 38.52/26.35/28.14 mAp on VG train/val/test set respectively.
-
-## Faster R-CNN pre-training
-The following command can be used to train your own Faster R-CNN model:
-```bash
-CUDA_VISIBLE_DEVICES=0,1,2,3 python -m torch.distributed.launch --master_port 10001 --nproc_per_node=4 tools/detector_pretrain_net.py --config-file "configs/e2e_relation_detector_X_101_32_8_FPN_1x.yaml" SOLVER.IMS_PER_BATCH 8 TEST.IMS_PER_BATCH 4 DTYPE "float16" SOLVER.MAX_ITER 50000 SOLVER.STEPS "(30000, 45000)" SOLVER.VAL_PERIOD 2000 SOLVER.CHECKPOINT_PERIOD 2000 MODEL.RELATION_ON False OUTPUT_DIR /home/kaihua/checkpoints/pretrained_faster_rcnn SOLVER.PRE_VAL False
-```
-where ```CUDA_VISIBLE_DEVICES``` and ```--nproc_per_node``` represent the id of GPUs and number of GPUs you use, ```--config-file``` means the config we use, where you can change other parameters. ```SOLVER.IMS_PER_BATCH``` and ```TEST.IMS_PER_BATCH``` are the training and testing batch size respectively, ```DTYPE "float16"``` enables Automatic Mixed Precision supported by [APEX](https://github.com/NVIDIA/apex), ```SOLVER.MAX_ITER``` is the maximum iteration, ```SOLVER.STEPS``` is the steps where we decay the learning rate, ```SOLVER.VAL_PERIOD``` and ```SOLVER.CHECKPOINT_PERIOD``` are the periods of conducting val and saving checkpoint, ```MODEL.RELATION_ON``` means turning on the relationship head or not (since this is the pretraining phase for Faster R-CNN only, we turn off the relationship head),  ```OUTPUT_DIR``` is the output directory to save checkpoints and log (considering `/home/username/checkpoints/pretrained_faster_rcnn`), ```SOLVER.PRE_VAL``` means whether we conduct validation before training or not.
-
-
-## Scene Graph Generation as RoI_Head
-
-To standardize the SGG, I define scene graph generation as an RoI_Head. Referring to the design of other roi_heads like box_head, I put most of the SGG codes under ```maskrcnn_benchmark/modeling/roi_heads/relation_head``` and their calling sequence is as follows:
-
-![alt text](demo/relation_head.png "structure of relation_head")
-
-
-## Perform training on Scene Graph Generation
-
-There are **three standard protocols**: (1) Predicate Classification (PredCls): taking ground truth bounding boxes and labels as inputs, (2) Scene Graph Classification (SGCls) : using ground truth bounding boxes without labels, (3) Scene Graph Detection (SGDet): detecting SGs from scratch. We use two switches ```MODEL.ROI_RELATION_HEAD.USE_GT_BOX``` and ```MODEL.ROI_RELATION_HEAD.USE_GT_OBJECT_LABEL``` to select the protocols. 
-
-For **Predicate Classification (PredCls)**, we need to set:
-``` bash
-MODEL.ROI_RELATION_HEAD.USE_GT_BOX True MODEL.ROI_RELATION_HEAD.USE_GT_OBJECT_LABEL True
-```
-For **Scene Graph Classification (SGCls)**:
-``` bash
-MODEL.ROI_RELATION_HEAD.USE_GT_BOX True MODEL.ROI_RELATION_HEAD.USE_GT_OBJECT_LABEL False
-```
-For **Scene Graph Detection (SGDet)**:
-``` bash
-MODEL.ROI_RELATION_HEAD.USE_GT_BOX False MODEL.ROI_RELATION_HEAD.USE_GT_OBJECT_LABEL False
-```
-
-### Predefined Models
-We abstract various SGG models to be different ```relation-head predictors``` in the file ```roi_heads/relation_head/roi_relation_predictors.py```, which are independent of the Faster R-CNN backbone and relation-head feature extractor. To select our predefined models, you can use ```MODEL.ROI_RELATION_HEAD.PREDICTOR```.
-
-For [Neural-MOTIFS](https://arxiv.org/abs/1711.06640) Model:
-```bash
-MODEL.ROI_RELATION_HEAD.PREDICTOR MotifPredictor
-```
-For [Iterative-Message-Passing(IMP)](https://arxiv.org/abs/1701.02426) Model (Note that SOLVER.BASE_LR should be changed to 0.001 in SGCls, or the model won't converge):
-```bash
-MODEL.ROI_RELATION_HEAD.PREDICTOR IMPPredictor
-```
-For [VCTree](https://arxiv.org/abs/1812.01880) Model:
-```bash
-MODEL.ROI_RELATION_HEAD.PREDICTOR VCTreePredictor
-```
-For our predefined Transformer Model (Note that Transformer Model needs to change SOLVER.BASE_LR to 0.001, SOLVER.SCHEDULE.TYPE to WarmupMultiStepLR, SOLVER.MAX_ITER to 16000, SOLVER.IMS_PER_BATCH to 16, SOLVER.STEPS to (10000, 16000).), which is provided by [Jiaxin Shi](https://github.com/shijx12):
-```bash
-MODEL.ROI_RELATION_HEAD.PREDICTOR TransformerPredictor
-```
-For [Unbiased-Causal-TDE](https://arxiv.org/abs/2002.11949) Model:
-```bash
-MODEL.ROI_RELATION_HEAD.PREDICTOR CausalAnalysisPredictor
-```
-
-The default settings are under ```configs/e2e_relation_X_101_32_8_FPN_1x.yaml``` and ```maskrcnn_benchmark/config/defaults.py```. The priority is ```command > yaml > defaults.py```
-
-### Customize Your Own Model
-If you want to customize your own model, you can refer ```maskrcnn-benchmark/modeling/roi_heads/relation_head/model_XXXXX.py``` and ```maskrcnn-benchmark/modeling/roi_heads/relation_head/utils_XXXXX.py```. You also need to add corresponding nn.Module in ```maskrcnn-benchmark/modeling/roi_heads/relation_head/roi_relation_predictors.py```. Sometimes you may also need to change the inputs & outputs of the module through ```maskrcnn-benchmark/modeling/roi_heads/relation_head/relation_head.py```.
-
-
-
-### Examples of the Training Command
-Training Example 1 : (PreCls, Motif Model)
-```bash
-CUDA_VISIBLE_DEVICES=0,1 python -m torch.distributed.launch --master_port 10025 --nproc_per_node=2 tools/relation_train_net.py --config-file "configs/e2e_relation_X_101_32_8_FPN_1x.yaml" MODEL.ROI_RELATION_HEAD.USE_GT_BOX True MODEL.ROI_RELATION_HEAD.USE_GT_OBJECT_LABEL True MODEL.ROI_RELATION_HEAD.PREDICTOR MotifPredictor SOLVER.IMS_PER_BATCH 12 TEST.IMS_PER_BATCH 2 DTYPE "float16" SOLVER.MAX_ITER 50000 SOLVER.VAL_PERIOD 2000 SOLVER.CHECKPOINT_PERIOD 2000 GLOVE_DIR /home/kaihua/glove MODEL.PRETRAINED_DETECTOR_CKPT /home/kaihua/checkpoints/pretrained_faster_rcnn/model_final.pth OUTPUT_DIR /home/kaihua/checkpoints/motif-precls-exmp
-```
-Training Example 1 : (PreCls, Motif Model, CAME4)
+The original experiments use Python 3.7, PyTorch 1.4.0, torchvision 0.5.0, CUDA 10.1, and NVIDIA Apex mixed precision. See [INSTALL.md](INSTALL.md) for the complete legacy environment setup.
 
 ```bash
-CUDA_VISIBLE_DEVICES=0,1 python -m torch.distributed.launch --master_port 30085 --nproc_per_node=2 tools/relation_train_net.py --config-file "configs/e2e_relation_X_101_32_8_FPN_1x.yaml"  --loss_option CAME_LOSS --num_experts 4 MODEL.ROI_RELATION_HEAD.USE_GT_BOX True MODEL.ROI_RELATION_HEAD.USE_GT_OBJECT_LABEL True MODEL.ROI_RELATION_HEAD.USE_RELATION_AWARE_GATING True MODEL.ROI_RELATION_HEAD.PREDICTOR MotifPredictor SOLVER.IMS_PER_BATCH 12 TEST.IMS_PER_BATCH 2 DTYPE "float16" SOLVER.MAX_ITER 50000 SOLVER.VAL_PERIOD 2000 SOLVER.CHECKPOINT_PERIOD 2000 GLOVE_DIR ./glove MODEL.PRETRAINED_DETECTOR_CKPT ./checkpoints/pretrained_faster_rcnn/model_final.pth OUTPUT_DIR ./checkpoints/motif-precls-CAME-4
+git clone https://github.com/hszhoushen/Peer_Learning.git
+cd Peer_Learning
+python setup.py build develop
 ```
 
-where ```GLOVE_DIR``` is the directory used to save glove initializations, ```MODEL.PRETRAINED_DETECTOR_CKPT``` is the pretrained Faster R-CNN model you want to load, ```OUTPUT_DIR``` is the output directory used to save checkpoints and the log. Since we use the ```WarmupReduceLROnPlateau``` as the learning scheduler for SGG, ```SOLVER.STEPS``` is not required anymore.
+## Data Preparation
 
+Follow [DATASET.md](DATASET.md) to prepare Visual Genome. The default configuration expects:
 
+- Visual Genome images and annotations;
+- GloVe embeddings under `./glove`;
+- a pretrained Faster R-CNN checkpoint at `./checkpoints/pretrained_faster_rcnn/model_final.pth`.
 
+Alternative locations can be supplied through the environment variables described below. Dataset files and model checkpoints are not stored in Git.
 
-## Evaluation
+## Quick Start
 
-### Examples of the Test Command
-Test Example 1 : (PreCls, Motif Model)
+All standard experiments use the common runner `scripts/PLME/run.sh`. The wrappers select the paper configuration for each backbone and task.
+
+Train Motifs on PredCls with two GPUs:
+
 ```bash
-CUDA_VISIBLE_DEVICES=0 python -m torch.distributed.launch --master_port 10027 --nproc_per_node=1 tools/relation_test_net.py --config-file "configs/e2e_relation_X_101_32_8_FPN_1x.yaml" MODEL.ROI_RELATION_HEAD.USE_GT_BOX True MODEL.ROI_RELATION_HEAD.USE_GT_OBJECT_LABEL True MODEL.ROI_RELATION_HEAD.PREDICTOR MotifPredictor TEST.IMS_PER_BATCH 1 DTYPE "float16" GLOVE_DIR /home/kaihua/glove MODEL.PRETRAINED_DETECTOR_CKPT /home/kaihua/checkpoints/motif-precls-exmp OUTPUT_DIR /home/kaihua/checkpoints/motif-precls-exmp
+GPUS=0,1 SEED=42 bash scripts/PLME/motifs/train_predcls.sh
 ```
 
-Test Example 2 : (PreCls, Motif Model, CAME4)
+Evaluate a trained checkpoint directory:
+
 ```bash
-CUDA_VISIBLE_DEVICES=0,1 python -m torch.distributed.launch --master_port 12027 --nproc_per_node=2 tools/relation_test_net.py --config-file "configs/e2e_relation_X_101_32_8_FPN_1x.yaml"  --loss_option CAME_LOSS --num_experts 4 MODEL.ROI_RELATION_HEAD.USE_GT_BOX True MODEL.ROI_RELATION_HEAD.USE_GT_OBJECT_LABEL True MODEL.ROI_RELATION_HEAD.USE_RELATION_AWARE_GATING True MODEL.ROI_RELATION_HEAD.PREDICTOR MotifPredictor TEST.IMS_PER_BATCH 12 DTYPE "float16" GLOVE_DIR ./glove MODEL.PRETRAINED_DETECTOR_CKPT ./checkpoints/pretrained_faster_rcnn/model_final.pth OUTPUT_DIR ./checkpoints/motif-precls-CAME-4
+GPUS=0,1 \
+OUTPUT_DIR=./checkpoints/motifs-pl-predcls-seed42 \
+bash scripts/PLME/motifs/test_predcls.sh
 ```
 
+The output directory created during training contains a `last_checkpoint` file and is loaded automatically. To evaluate a standalone checkpoint, append an explicit override such as `MODEL.WEIGHT /path/to/model_final.pth`.
 
+Run the corresponding VCTree or Transformer experiment:
 
-## SGDet on Custom Images
-
-Note that evaluation on custum images is only applicable for SGDet model, because PredCls and SGCls model requires additional ground-truth bounding boxes information. To detect scene graphs into a json file on your own images, you need to turn on the switch TEST.CUSTUM_EVAL and give a folder path that contains the custom images to TEST.CUSTUM_PATH. Only JPG files are allowed. The output will be saved as custom_prediction.json in the given DETECTED_SGG_DIR.
-
-Test Example 1 : (SGDet, **Causal TDE**, MOTIFS Model, SUM Fusion) [(checkpoint)](https://onedrive.live.com/embed?cid=22376FFAD72C4B64&resid=22376FFAD72C4B64%21781947&authkey=AF_EM-rkbMyT3gs)
 ```bash
-CUDA_VISIBLE_DEVICES=0 python -m torch.distributed.launch --master_port 10027 --nproc_per_node=1 tools/relation_test_net.py --config-file "configs/e2e_relation_X_101_32_8_FPN_1x.yaml" MODEL.ROI_RELATION_HEAD.USE_GT_BOX False MODEL.ROI_RELATION_HEAD.USE_GT_OBJECT_LABEL False MODEL.ROI_RELATION_HEAD.PREDICTOR CausalAnalysisPredictor MODEL.ROI_RELATION_HEAD.CAUSAL.EFFECT_TYPE TDE MODEL.ROI_RELATION_HEAD.CAUSAL.FUSION_TYPE sum MODEL.ROI_RELATION_HEAD.CAUSAL.CONTEXT_LAYER motifs TEST.IMS_PER_BATCH 1 DTYPE "float16" GLOVE_DIR /home/kaihua/glove MODEL.PRETRAINED_DETECTOR_CKPT /home/kaihua/checkpoints/causal-motifs-sgdet OUTPUT_DIR /home/kaihua/checkpoints/causal-motifs-sgdet TEST.CUSTUM_EVAL True TEST.CUSTUM_PATH /home/kaihua/checkpoints/custom_images DETECTED_SGG_DIR /home/kaihua/checkpoints/your_output_path
+GPUS=0,1 SEED=42 bash scripts/PLME/vctree/train_predcls.sh
+GPUS=0,1 SEED=42 bash scripts/PLME/transformer/train_predcls.sh
 ```
 
-Test Example 2 : (SGDet, **Original**, MOTIFS Model, SUM Fusion) [(same checkpoint)](https://onedrive.live.com/embed?cid=22376FFAD72C4B64&resid=22376FFAD72C4B64%21781947&authkey=AF_EM-rkbMyT3gs)
+The same interface is available for `predcls`, `sgcls`, and `sgdet`, for both training and testing:
+
+```text
+scripts/PLME/<motifs|vctree|transformer>/<train|test>_<predcls|sgcls|sgdet>.sh
+```
+
+### Runtime Options
+
+The wrappers can be configured without editing source files:
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `GPUS` | `0,1` | Comma-separated visible GPU IDs |
+| `SEED` | `42` | Random seed used for training |
+| `GLOVE_DIR` | `./glove` | GloVe embedding directory |
+| `DETECTOR_CKPT` | `./checkpoints/pretrained_faster_rcnn/model_final.pth` | Detector checkpoint |
+| `OUTPUT_DIR` | task-dependent | Training output or evaluation checkpoint directory |
+| `NUM_EXPERTS` | `3` | Number of peers |
+| `EXPERT_MODE` | `hbt_b_t` | Head/body/tail sample-partition mode |
+| `KNOWLEDGE_WEIGHTS` | backbone-dependent | Expertise-aware voting weights |
+| `BASE_LR` | `0.01` (`0.001` for Transformer) | Base learning rate |
+| `TRAIN_BATCH` | `12` | Global training batch size |
+| `MAX_ITER` | `20000` | Maximum training iterations |
+| `DRY_RUN` | `0` | Print the resolved command without launching it |
+
+Additional configuration overrides can be appended to any wrapper command, for example:
+
 ```bash
-CUDA_VISIBLE_DEVICES=0 python -m torch.distributed.launch --master_port 10027 --nproc_per_node=1 tools/relation_test_net.py --config-file "configs/e2e_relation_X_101_32_8_FPN_1x.yaml" MODEL.ROI_RELATION_HEAD.USE_GT_BOX False MODEL.ROI_RELATION_HEAD.USE_GT_OBJECT_LABEL False MODEL.ROI_RELATION_HEAD.PREDICTOR CausalAnalysisPredictor MODEL.ROI_RELATION_HEAD.CAUSAL.EFFECT_TYPE none MODEL.ROI_RELATION_HEAD.CAUSAL.FUSION_TYPE sum MODEL.ROI_RELATION_HEAD.CAUSAL.CONTEXT_LAYER motifs TEST.IMS_PER_BATCH 1 DTYPE "float16" GLOVE_DIR /home/kaihua/glove MODEL.PRETRAINED_DETECTOR_CKPT /home/kaihua/checkpoints/causal-motifs-sgdet OUTPUT_DIR /home/kaihua/checkpoints/causal-motifs-sgdet TEST.CUSTUM_EVAL True TEST.CUSTUM_PATH /home/kaihua/checkpoints/custom_images DETECTED_SGG_DIR /home/kaihua/checkpoints/your_output_path
+GPUS=2,3 SEED=379 MAX_ITER=24000 \
+bash scripts/PLME/motifs/train_predcls.sh SOLVER.VAL_PERIOD 1000
 ```
 
-The output is a json file. For each image, the scene graph information is saved as a dictionary containing bbox(sorted), bbox_labels(sorted), bbox_scores(sorted), rel_pairs(sorted), rel_labels(sorted), rel_scores(sorted), rel_all_scores(sorted), where the last rel_all_scores give all 51 predicates probability for each pair of objects. The dataset information is saved as custom_data_info.json in the same DETECTED_SGG_DIR.
+When changing `NUM_EXPERTS`, also provide an `EXPERT_MODE` and a `KNOWLEDGE_WEIGHTS` list of matching length.
 
-## Visualize Detected SGs of Custom Images
-To visualize the detected scene graphs of custom images, you can follow the jupyter note: [visualization/3.visualize_custom_SGDet.jpynb](https://github.com/KaihuaTang/Scene-Graph-Benchmark.pytorch/blob/master/visualization/3.visualize_custom_SGDet.ipynb). The inputs of our visualization code are custom_prediction.json and custom_data_info.json in DETECTED_SGG_DIR. They will be automatically generated if you run the above custom SGDet instruction successfully. Note that there may be too much trivial bounding boxes and relationships, so you can select top-k bbox and predicates for better scene graphs by change parameters box_topk and rel_topk. 
+`MODEL.ROI_RELATION_HEAD.KNOWLEDGE_WEIGHTS` is now read from YAML or command-line configuration and is no longer overwritten inside the training program.
 
+## Open Images V6
 
+Open Images experiments use the Transformer backbone and the SGDet protocol:
 
-## Citations
-
-If you find this project helps your research, please kindly consider citing our project or papers in your publications.
-
+```bash
+GPUS=0,1 SEED=42 bash scripts/PLME/openimages/train_sgdet.sh
+GPUS=0,1 OUTPUT_DIR=./checkpoints/transformer-pl-oiv6-sgdet-seed42 \
+bash scripts/PLME/openimages/test_sgdet.sh
 ```
-@article{zhou2024peer,
-  title={Peer learning for unbiased scene graph generation},
-  author={Zhou, Liguang and Hu, Junjie and Zhou, Yuhongze and Lam, Tin Lun and Xu, Yangsheng},
-  journal={arXiv preprint arXiv:2301.00146},
-  year={2024}
+
+Set `CONFIG_FILE`, `GLOVE_DIR`, `DETECTOR_CKPT`, and `OUTPUT_DIR` if the files are stored elsewhere.
+
+## Selected Results
+
+The paper reports substantial improvements in mean Recall under the standard Visual Genome protocols. Selected mR@100 results are shown below; consult the paper for the complete R@K, mR@K, and backbone comparisons.
+
+| Backbone | PredCls mR@100 | SGCls mR@100 | SGDet mR@100 |
+| --- | ---: | ---: | ---: |
+| Motifs + Peer Learning | 40.9 | 20.9 | 19.2 |
+| VCTree + Peer Learning | 42.1 | 26.5 | 19.8 |
+
+Small differences can result from the CUDA/PyTorch version, distributed sampling, and random seed. For statistical studies, keep all settings fixed and change only `SEED`.
+
+## Checkpoints
+
+Large detector and SGG checkpoints are intentionally excluded from the Git repository. Published model files can be attached to the `v1.0-tits` GitHub release without changing the source history. Each released model should include its backbone, task, seed, configuration, and reported metrics.
+
+## Citation
+
+If this project is useful in your research, please cite:
+
+```bibtex
+@article{zhou2026peer,
+  author  = {Zhou, Liguang and Hu, Junjie and Zhou, Yuhongze and Lam, Tin Lun and Xu, Yangsheng},
+  title   = {Peer Learning Approach to Unbiased Scene Graph Generation for Traffic Scene Understanding},
+  journal = {IEEE Transactions on Intelligent Transportation Systems},
+  year    = {2026},
+  volume  = {27},
+  number  = {2},
+  pages   = {2365--2379},
+  doi     = {10.1109/TITS.2025.3635279}
 }
 ```
+
+## Acknowledgments
+
+We thank the authors of [Scene-Graph-Benchmark.pytorch](https://github.com/KaihuaTang/Scene-Graph-Benchmark.pytorch), [maskrcnn-benchmark](https://github.com/facebookresearch/maskrcnn-benchmark), Neural Motifs, and VCTree for their open-source implementations.
+
+## License
+
+This project follows the license included in [LICENSE](LICENSE).

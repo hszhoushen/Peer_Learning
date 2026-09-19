@@ -50,7 +50,7 @@ class IMPPredictor(nn.Module):
         # post decoding
         self.hidden_dim = config.MODEL.ROI_RELATION_HEAD.CONTEXT_HIDDEN_DIM
         self.pooling_dim = config.MODEL.ROI_RELATION_HEAD.CONTEXT_POOLING_DIM
-        
+
         if self.pooling_dim != config.MODEL.ROI_BOX_HEAD.MLP_HEAD_DIM:
             self.union_single_not_match = True
             self.up_dim = nn.Linear(config.MODEL.ROI_BOX_HEAD.MLP_HEAD_DIM, self.pooling_dim)
@@ -58,7 +58,7 @@ class IMPPredictor(nn.Module):
         else:
             self.union_single_not_match = False
 
-        # freq 
+        # freq
         if self.use_bias:
             statistics = get_dataset_statistics(config)
             self.freq_bias = FrequencyBias(config, statistics)
@@ -102,8 +102,8 @@ class IMPPredictor(nn.Module):
         add_losses = {}
 
         return obj_dists, rel_dists, add_losses
-    
-    
+
+
 @registry.ROI_RELATION_PREDICTOR.register("MotifPredictor")
 class MotifPredictor(nn.Module):
     def __init__(self, config, in_channels):
@@ -492,7 +492,7 @@ class CausalAnalysisPredictor(nn.Module):
         if self.separate_spatial:
             union_features, spatial_conv_feats = union_features
             post_ctx_rep = post_ctx_rep * spatial_conv_feats
-        
+
         if self.spatial_for_vision:
             post_ctx_rep = post_ctx_rep * self.spt_emb(pair_bbox)
 
@@ -638,12 +638,12 @@ class TransformerPredictor(nn.Module):
         self.rel_compress = nn.Linear(self.pooling_dim, self.num_rel_cls)
         self.ctx_compress = nn.Linear(self.hidden_dim * 2, self.num_rel_cls)
 
-        # initialize layer parameters 
+        # initialize layer parameters
         layer_init(self.post_emb, 10.0 * (1.0 / self.hidden_dim) ** 0.5, normal=True)
         layer_init(self.rel_compress, xavier=True)
         layer_init(self.ctx_compress, xavier=True)
         layer_init(self.post_cat, xavier=True)
-        
+
         if self.pooling_dim != config.MODEL.ROI_BOX_HEAD.MLP_HEAD_DIM:
             self.union_single_not_match = True
             self.up_dim = nn.Linear(config.MODEL.ROI_BOX_HEAD.MLP_HEAD_DIM, self.pooling_dim)
@@ -1024,7 +1024,7 @@ class MotifPredictor_PL(nn.Module):
 class VCTreePredictor_PL(nn.Module):
     def __init__(self, config, in_channels):
         super(VCTreePredictor_PL, self).__init__()
-        self.attribute_on = config.MODEL.ATTRIBUTE_ON   
+        self.attribute_on = config.MODEL.ATTRIBUTE_ON
         self.num_obj_cls = config.MODEL.ROI_BOX_HEAD.NUM_CLASSES
         self.num_att_cls = config.MODEL.ROI_ATTRIBUTE_HEAD.NUM_ATTRIBUTES
         self.num_rel_cls = config.MODEL.ROI_RELATION_HEAD.NUM_CLASSES
@@ -1139,11 +1139,11 @@ class VCTreePredictor_PL(nn.Module):
                 # print('edge_info.shape:', edge_info)
                 rel_dists_lst.append(edge_info)
                 rel_dists_full_lst.append(rel_dists_full)
-                
+
         elif self.num_experts == 1:
             rel_dists = self.edge_ctx_process(0, edge_ctx, rel_pair_idxs, obj_preds, union_features, num_objs)
-            
-            
+
+
         if self.num_experts > 1:
             weighted_rel_dists_full_lst = []
             weight_lst = np.zeros(self.num_experts)
@@ -1153,7 +1153,7 @@ class VCTreePredictor_PL(nn.Module):
                     weight_lst[i] = 1
                 else:
                     weight_lst[i] = 1 / self.num_experts * sigma
-            
+
             # print('weight_lst:', weight_lst)
             # print('rel_dists_full_lst:', len(rel_dists_full_lst))
             # print('rel_dists_full_lst:', rel_dists_full_lst[0].shape)
@@ -1230,8 +1230,8 @@ class VCTreePredictor_PL(nn.Module):
 
 
         return rel_dists, rel_dists_full
-    
-    
+
+
 @registry.ROI_RELATION_PREDICTOR.register("TransformerPredictor_PL")
 class TransformerPredictor_PL(nn.Module):
     def __init__(self, config, in_channels):
@@ -1429,7 +1429,7 @@ class MotifPredictor_CAME(nn.Module):
 
         print('self.num_obj_cls:', self.num_obj_cls)
         print('obj_classes:', len(obj_classes), obj_classes)
-        
+
         assert self.num_obj_cls == len(obj_classes)
         assert self.num_att_cls == len(att_classes)
         assert self.num_rel_cls == len(rel_classes)
@@ -1611,7 +1611,10 @@ class MotifPredictor_CAME(nn.Module):
         rel_dists = torch.mul(weight, rel_dists)
         rel_dists = rel_dists.split(num_rels, dim=0)
 
-        # print('rel_dists:', len(rel_dists), rel_dists[0])   # tuple contains 6 elements, [X, 51], X is arbitrary number
+        # print('=========rel_dists_debug=========')
+        # print('rel_dists:', len(rel_dists), rel_dists[0].shape)   # tuple contains 6 elements, [X, 51], X is arbitrary number
+        # for i in range(len(rel_dists)):
+        #     print('rel_dists[{}]:'.format(i), rel_dists[i].shape)
 
         # print('prod_rep:', len(prod_rep), prod_rep)
         # print('pair_pred:', len(pair_pred), pair_pred)
@@ -1629,16 +1632,34 @@ class MotifPredictor_CAME(nn.Module):
 
         # encode context infomation
         if self.attribute_on:
-            obj_dists, obj_preds, att_dists, edge_ctx = self.context_layer(roi_features, proposals, logger)
+            obj_dists, obj_preds, att_dists, edge_ctx = self.context_layer(roi_features,
+                                                                           proposals,
+                                                                           logger)
+
+            # print('=========attribute_on_debug=========')
+            # print('obj_dists.shape:', obj_dists.shape)
+            # print('obj_preds.shape:', obj_preds.shape)
+            # print('edge_ctx_info.shape:', edge_ctx_info.shape)
 
 
         else:
             if self.use_relation_aware_gating:
+                # print('use_relation_aware_gating')
                 obj_dists, obj_preds, edge_ctx_info, beta_relation_aware_gating, _ = self.context_layer(roi_features,
                                                                                                         proposals,
                                                                                                         logger)
             else:
-                obj_dists, obj_preds, edge_ctx_info, _ = self.context_layer(roi_features, proposals, logger)
+                obj_dists, obj_preds, edge_ctx_info, _ = self.context_layer(roi_features,
+                                                                            proposals,
+                                                                            logger)
+            edge_ctx = edge_ctx_info
+
+            # print('=========use_relation_aware_gating_debug=========')
+            # print('obj_dists.shape:', obj_dists.shape)
+            # print('obj_preds.shape:', obj_preds.shape)
+            # print('edge_ctx_info.shape:', edge_ctx_info.shape)
+
+
 
             # if self.num_experts > 1:
             #     outs = edge_ctx_info['logits']
@@ -1651,10 +1672,21 @@ class MotifPredictor_CAME(nn.Module):
             # elif self.num_experts == 1:
             #     edge_ctx = edge_ctx_info
 
-            edge_ctx = edge_ctx_info
-
+        # print('test:', 'test20251203')
         num_objs = [len(b) for b in proposals]
+
+        # print('=========num_objs_debug=========')
+        # print('proposals:', proposals)
+        # print('num_objs:', len(num_objs))
+        # for i in range(len(num_objs)):
+        #     print('num_objs[{}]:'.format(i), num_objs[i])
+
         num_rels = [r.shape[0] for r in rel_pair_idxs]
+
+        # print('=========rel_pair_debug=========')
+        # print('rel_pair_idxs:', len(rel_pair_idxs))
+        # for i in range(len(rel_pair_idxs)):
+        #     print('rel_pair_idxs[{}]:'.format(i), rel_pair_idxs[i].shape)
 
         # print('num_objs:', num_objs)    # num_objs: [80, 80, 80, 80, 80, 80]
         obj_dists = obj_dists.split(num_objs, dim=0)
@@ -1678,6 +1710,9 @@ class MotifPredictor_CAME(nn.Module):
                 selected_info_matrix = None
 
             rel_prob_matrix = self.context_encoder(edge_ctx, rel_pair_idxs, obj_preds, union_features, num_objs)
+
+            # print('=========rel_prob_matrix_debug=========')
+            # print('rel_prob_matrix.shape:', rel_prob_matrix.shape)
 
             rel_dists, rel_dists_full = self.edge_ctx_process(0, edge_ctx, rel_pair_idxs, obj_preds, union_features, num_objs, rel_prob_matrix)
             rel_dists_lst.append(rel_dists)
@@ -1718,9 +1753,11 @@ class MotifPredictor_CAME(nn.Module):
 
         elif self.num_experts > 1:
             if self.use_relation_sampling:
+                # print('use_relation_sampling')
                 return obj_dists, rel_dists, add_losses, rel_labels_lst, rel_dists_lst, beta_relation_aware_gating
 
             elif self.use_relation_aware_gating:
+                # print('use_relation_aware_gating')
                 return obj_dists, rel_dists, add_losses, rel_dists_lst, beta_relation_aware_gating, weighted_rel_dists_full_sum
 
             else:
@@ -2396,11 +2433,11 @@ class MotifPredictor_CAME_ENCODER(nn.Module):
         self.post_cat = nn.Linear(self.hidden_dim * 2, self.pooling_dim)
         self.rel_compress = nn.Linear(self.pooling_dim, self.num_rel_cls, bias=True)
 
-        # initialize layer parameters 
+        # initialize layer parameters
         layer_init(self.post_emb, 10.0 * (1.0 / self.hidden_dim) ** 0.5, normal=True)
         layer_init(self.post_cat, xavier=True)
         layer_init(self.rel_compress, xavier=True)
-        
+
         if self.pooling_dim != config.MODEL.ROI_BOX_HEAD.MLP_HEAD_DIM:
             self.union_single_not_match = True
             self.up_dim = nn.Linear(config.MODEL.ROI_BOX_HEAD.MLP_HEAD_DIM, self.pooling_dim)
@@ -2535,7 +2572,7 @@ class MotifPredictor_CAME_ENCODER(nn.Module):
         if self.attribute_on:
             att_dists = att_dists.split(num_objs, dim=0)
             return (obj_dists, att_dists), rel_dists, add_losses
-        
+
         elif self.num_experts > 1:
             if self.use_relation_aware_gating:
                 return obj_dists, rel_dists, add_losses, rel_dists_lst, beta_relation_aware_gating
@@ -2592,10 +2629,10 @@ class VCTreePredictor_CAME_ENCODER(nn.Module):
         layer_init(self.ctx_compress, xavier=True)
         #layer_init(self.uni_compress, xavier=True)
 
-        # initialize layer parameters 
+        # initialize layer parameters
         layer_init(self.post_emb, 10.0 * (1.0 / self.hidden_dim) ** 0.5, normal=True)
         layer_init(self.post_cat, xavier=True)
-        
+
         if self.pooling_dim != config.MODEL.ROI_BOX_HEAD.MLP_HEAD_DIM:
             self.union_single_not_match = True
             self.up_dim = nn.Linear(config.MODEL.ROI_BOX_HEAD.MLP_HEAD_DIM, self.pooling_dim)
@@ -2625,7 +2662,7 @@ class VCTreePredictor_CAME_ENCODER(nn.Module):
 
             outs = edge_ctx_info['logits']
             edge_ctx = edge_ctx_info['output']
-  
+
         num_objs = [len(b) for b in proposals]
         obj_preds = obj_preds.split(num_objs, dim=0)
         obj_dists = obj_dists.split(num_objs, dim=0)
@@ -2750,7 +2787,7 @@ class CausalAnalysisPredictor_CAME(nn.Module):
         # post decoding
         self.hidden_dim = config.MODEL.ROI_RELATION_HEAD.CONTEXT_HIDDEN_DIM
         self.pooling_dim = config.MODEL.ROI_RELATION_HEAD.CONTEXT_POOLING_DIM
-        
+
         if self.use_vtranse:
             self.edge_dim = self.pooling_dim
             self.post_emb = nn.Linear(self.hidden_dim, self.pooling_dim * 2)
@@ -2766,14 +2803,14 @@ class CausalAnalysisPredictor_CAME(nn.Module):
         if self.fusion_type == 'gate':
             self.ctx_gate_fc = nn.Linear(self.pooling_dim, self.num_rel_cls)
             layer_init(self.ctx_gate_fc, xavier=True)
-        
-        # initialize layer parameters 
+
+        # initialize layer parameters
         layer_init(self.post_emb, 10.0 * (1.0 / self.hidden_dim) ** 0.5, normal=True)
         if not self.use_vtranse:
             layer_init(self.post_cat[0], xavier=True)
             layer_init(self.ctx_compress, xavier=True)
         layer_init(self.vis_compress, xavier=True)
-        
+
         assert self.pooling_dim == config.MODEL.ROI_BOX_HEAD.MLP_HEAD_DIM
 
         # convey statistics into FrequencyBias to avoid loading again
@@ -2781,7 +2818,7 @@ class CausalAnalysisPredictor_CAME(nn.Module):
 
         # add spatial emb for visual feature
         if self.spatial_for_vision:
-            self.spt_emb = nn.Sequential(*[nn.Linear(32, self.hidden_dim), 
+            self.spt_emb = nn.Sequential(*[nn.Linear(32, self.hidden_dim),
                                             nn.ReLU(inplace=True),
                                             nn.Linear(self.hidden_dim, self.pooling_dim),
                                             nn.ReLU(inplace=True)
@@ -2875,8 +2912,8 @@ class CausalAnalysisPredictor_CAME(nn.Module):
 
         post_ctx_rep, pair_pred, pair_bbox, pair_obj_probs, edge_rep, rel_dist_list =\
             self.edge_ctx_process(union_features, edge_ctx, num_rels, num_objs, obj_preds, obj_dist_prob, obj_boxs, rel_pair_idxs)
-        
-        
+
+
         post_ctx_rep_temp_lst=[]
         pair_obj_probs_temp_lst=[]
 
@@ -2895,7 +2932,7 @@ class CausalAnalysisPredictor_CAME(nn.Module):
             pair_obj_probs_rame=torch.stack(pair_obj_probs_temp_lst, dim=0).sum(dim=0)
 
             return post_ctx_rep, pair_pred, pair_bbox, pair_obj_probs, binary_preds, obj_dist_prob, edge_rep, obj_dist_list, rel_dist_list, rel_dists_lst, beta_relation_aware_gating, post_ctx_rep_rame, pair_obj_probs_rame
-        
+
 
     def forward(self, proposals, rel_pair_idxs, rel_labels, rel_binarys, roi_features, union_features, logger=None):
         """
@@ -2951,14 +2988,14 @@ class CausalAnalysisPredictor_CAME(nn.Module):
             self.untreated_feat = self.moving_average(self.untreated_feat, union_features)
 
         elif self.effect_analysis:
-            
+
             if "came" in self.effect_type:
                 with torch.no_grad():
                     # untreated spatial
                     if self.spatial_for_vision:
                         avg_spt_rep = self.spt_emb(self.untreated_spt.clone().detach().view(1, -1))
                     # untreated context
-                    avg_ctx_rep_rame = avg_post_ctx_rep_rame * avg_spt_rep if self.spatial_for_vision else avg_post_ctx_rep_rame  
+                    avg_ctx_rep_rame = avg_post_ctx_rep_rame * avg_spt_rep if self.spatial_for_vision else avg_post_ctx_rep_rame
                     avg_ctx_rep_rame = avg_ctx_rep_rame * self.untreated_conv_spt.clone().detach().view(1, -1) if self.separate_spatial else avg_ctx_rep_rame
                     # untreated visual
                     avg_vis_rep_rame = self.untreated_feat.clone().detach().view(1, -1)
@@ -2986,7 +3023,7 @@ class CausalAnalysisPredictor_CAME(nn.Module):
                     if self.spatial_for_vision:
                         avg_spt_rep = self.spt_emb(self.untreated_spt.clone().detach().view(1, -1))
                     # untreated context
-                    avg_ctx_rep = avg_post_ctx_rep * avg_spt_rep if self.spatial_for_vision else avg_post_ctx_rep  
+                    avg_ctx_rep = avg_post_ctx_rep * avg_spt_rep if self.spatial_for_vision else avg_post_ctx_rep
                     avg_ctx_rep = avg_ctx_rep * self.untreated_conv_spt.clone().detach().view(1, -1) if self.separate_spatial else avg_ctx_rep
                     # untreated visual
                     avg_vis_rep = self.untreated_feat.clone().detach().view(1, -1)
@@ -3037,7 +3074,7 @@ class CausalAnalysisPredictor_CAME(nn.Module):
             #union_dists = ctx_dists * torch.sigmoid(vis_dists) * torch.sigmoid(frq_dists)                           # balanced recall and mean recall
             #union_dists = ctx_dists * (torch.sigmoid(vis_dists) + torch.sigmoid(frq_dists)) / 2.0                   # good zero-shot Recall
             #union_dists = ctx_dists * torch.sigmoid((vis_dists.exp() + frq_dists.exp() + 1e-9).log())               # good zero-shot Recall, bad for all of the rest
-            
+
         elif self.fusion_type == 'sum':
             union_dists = vis_dists + ctx_dists + frq_dists
         else:
