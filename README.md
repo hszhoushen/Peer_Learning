@@ -47,7 +47,7 @@ All standard experiments use the common runner `scripts/PLME/run.sh`. The wrappe
 Train Motifs on PredCls with two GPUs:
 
 ```bash
-GPUS=0,1 SEED=42 bash scripts/PLME/motifs/train_predcls.sh
+GPUS=0,1 SEED=678 bash scripts/PLME/motifs/train_predcls.sh
 ```
 
 Evaluate a trained checkpoint directory:
@@ -63,8 +63,8 @@ The output directory created during training contains a `last_checkpoint` file a
 Run the corresponding VCTree or Transformer experiment:
 
 ```bash
-GPUS=0,1 SEED=42 bash scripts/PLME/vctree/train_predcls.sh
-GPUS=0,1 SEED=42 bash scripts/PLME/transformer/train_predcls.sh
+GPUS=0,1 SEED=678 bash scripts/PLME/vctree/train_predcls.sh
+GPUS=0,1 SEED=678 bash scripts/PLME/transformer/train_predcls.sh
 ```
 
 The same interface is available for `predcls`, `sgcls`, and `sgdet`, for both training and testing:
@@ -80,7 +80,7 @@ The wrappers can be configured without editing source files:
 | Variable | Default | Description |
 | --- | --- | --- |
 | `GPUS` | `0,1` | Comma-separated visible GPU IDs |
-| `SEED` | `42` | Random seed used for training |
+| `SEED` | `678` | Default paper seed used for training; override it for multi-run studies |
 | `GLOVE_DIR` | `./glove` | GloVe embedding directory |
 | `DETECTOR_CKPT` | `./checkpoints/pretrained_faster_rcnn/model_final.pth` | Detector checkpoint |
 | `OUTPUT_DIR` | task-dependent | Training output or evaluation checkpoint directory |
@@ -109,8 +109,8 @@ When changing `NUM_EXPERTS`, also provide an `EXPERT_MODE` and a `KNOWLEDGE_WEIG
 Open Images experiments use the Transformer backbone and the SGDet protocol:
 
 ```bash
-GPUS=0,1 SEED=42 bash scripts/PLME/openimages/train_sgdet.sh
-GPUS=0,1 OUTPUT_DIR=./checkpoints/transformer-pl-oiv6-sgdet-seed42 \
+GPUS=0,1 SEED=678 bash scripts/PLME/openimages/train_sgdet.sh
+GPUS=0,1 OUTPUT_DIR=./checkpoints/transformer-pl-oiv6-sgdet-seed678 \
 bash scripts/PLME/openimages/test_sgdet.sh
 ```
 
